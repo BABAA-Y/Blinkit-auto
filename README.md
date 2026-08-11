@@ -54,6 +54,12 @@ Do not put secrets in the repository. In particular, never provide passwords, OT
 
 Wishlist commands use only the local SQLite database. `wishlist add` accepts `<id> <product-id> <product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled]`; items may then be listed, enabled, disabled, or removed. Prices are decimal currency values with at most two decimal places; quantities and cooldowns are non-negative validated integers (quantity must be greater than zero).
 
+## Telegram User Linking
+
+As Blinkit-Auto moves towards a multi-user architecture, users will eventually be able to link their Telegram accounts to the system. Once the Telegram bot is live, users will simply open the Blinkit-Auto Telegram bot and press `/start` to securely associate their Telegram chat with their Blinkit-Auto account. This will enable personalized, real-time availability notifications.
+
+Do not document or reveal any real bot tokens or API credentials here.
+
 ## Next integration step
 
 Each approved result is only a local eligibility decision recorded in SQLite; it never reserves stock or initiates a purchase. `run-once` evaluates the saved wishlist once. `run` evaluates immediately and then at the configured interval; Ctrl+C clears the scheduler before the process exits. `status` reports local wishlist and decision counts. Any future Blinkit integration should implement `BlinkitCatalog` in `src/integrations/blinkit.ts` through a documented, authorized API or user-approved manual handoff. Purchasing and payment execution are intentionally out of scope for this scaffold.
