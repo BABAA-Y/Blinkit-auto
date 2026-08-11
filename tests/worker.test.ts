@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SimpleItemSelector } from "../src/ai/decision.js";
+import { LocalProductMatcher } from "../src/ai/decision.js";
 import { SafeAutomationService } from "../src/app.js";
 import { PurchaseRules } from "../src/automation/rules.js";
 import { settingsFromEnvironment } from "../src/config.js";
@@ -25,7 +25,7 @@ const limits = { maximumOrderValuePaise: 20_000, dailySpendingLimitPaise: 50_000
 afterEach(() => { vi.useRealTimers(); directories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true })); });
 
 function wishlist(overrides: Partial<WishlistItem> = {}): WishlistItem {
-  return { id: "milk", productIdentifier: "mock-milk-1", productName: "Milk (1 L)", quantity: 1, maximumUnitPricePaise: 7000, enabled: true, cooldownMinutes: 0, ...overrides };
+  return { id: "milk", desiredProductName: "Milk", quantity: 1, maximumUnitPricePaise: 7000, enabled: true, cooldownMinutes: 0, ...overrides };
 }
 
 function worker(): { worker: WishlistWorker; decisions: DecisionRepository; orders: OrderRepository; wishlist: WishlistRepository } {
@@ -35,7 +35,7 @@ function worker(): { worker: WishlistWorker; decisions: DecisionRepository; orde
   const location = new LocationRepository(databasePath);
   decisions.initialize(); orders.initialize(); wishlistRepository.initialize(); location.initialize();
   const catalogProvider = new MockBlinkitCatalog();
-  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(limits), decisions, orders, location, logger);
+  const service = new SafeAutomationService(catalogProvider, catalogProvider, new LocalProductMatcher(), new PurchaseRules(limits), decisions, orders, location, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   return { worker: new WishlistWorker(wishlistRepository, service, orderService, logger), decisions, orders, wishlist: wishlistRepository };
 }
@@ -49,7 +49,7 @@ describe("WishlistWorker", () => {
 
   it("evaluates multiple wishlist items including rejected items", () => {
     const setup = worker(); setup.wishlist.save(wishlist());
-    setup.wishlist.save(wishlist({ id: "disabled", productIdentifier: "mock-banana-1", productName: "Bananas (6 pcs)", enabled: false }));
+    setup.wishlist.save(wishlist({ id: "disabled", desiredProductName: "Bananas", enabled: false }));
     const result = setup.worker.runOnce(new Date("2026-08-11T12:00:00Z"));
     expect(result.map((decision) => decision.reason)).toEqual([DecisionReason.DISABLED, DecisionReason.APPROVED]); expect(setup.decisions.count()).toBe(2); expect(setup.orders.list()).toHaveLength(2);
   });

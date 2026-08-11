@@ -1,5 +1,5 @@
 import type { ItemSelector } from "./ai/decision.js";
-import type { AvailabilityProvider, NotificationProvider, ProductCatalogProvider, WishlistProvider } from "./integrations/providers.js";
+import type { AvailabilityProvider, NotificationProvider, ProductSearchProvider, WishlistProvider } from "./integrations/providers.js";
 import type { Logger } from "./logging.js";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
@@ -10,7 +10,7 @@ import { formatTimestamp } from "./ui/formatting.js";
 export class WishlistMonitor {
   public constructor(
     private readonly wishlist: WishlistProvider,
-    private readonly catalog: ProductCatalogProvider,
+    private readonly catalog: ProductSearchProvider,
     private readonly availability: AvailabilityProvider,
     private readonly selector: ItemSelector,
     private readonly notification: NotificationProvider,
@@ -23,15 +23,15 @@ export class WishlistMonitor {
     mkdirSync(dirname(this.databasePath), { recursive: true });
     using database = new DatabaseSync(this.databasePath);
     const info = database.prepare("PRAGMA table_info(availability_state)").all() as any[];
-    if (info.length > 0 && !info.some(c => c.name === "pincode")) {
+    if (info.length > 0 && !info.some(c => c.name === "wishlist_id")) {
       database.exec("DROP TABLE availability_state");
     }
     database.exec(`CREATE TABLE IF NOT EXISTS availability_state (
-      product_identifier TEXT,
+      wishlist_id TEXT,
       pincode TEXT,
       available INTEGER NOT NULL,
       updated_at TEXT NOT NULL,
-      PRIMARY KEY (product_identifier, pincode)
+      PRIMARY KEY (wishlist_id, pincode)
     )`);
   }
 
@@ -44,20 +44,20 @@ export class WishlistMonitor {
       for (const item of items) {
         if (!item.enabled) continue;
         try {
-          const candidates = this.catalog.lookupProducts(item.productIdentifier);
-          const selectedItem = this.selector.select(item.productIdentifier, item.productName, candidates);
+          const candidates = this.catalog.searchProducts(item.desiredProductName, deliveryLocation);
+          const selectedItem = this.selector.select(item, candidates);
           if (!selectedItem) continue;
           
           const current = this.availability.getAvailability(selectedItem.sku, deliveryLocation);
           if (!current) continue;
 
           const isAvailable = current.available && current.availableQuantity > 0;
-          const wasAvailable = this.getPreviousState(item.productIdentifier, currentPincode);
+          const wasAvailable = this.getPreviousState(item.id, currentPincode);
 
           if (isAvailable && !wasAvailable) {
             const priceStr = (selectedItem.pricePaise / 100).toFixed(2);
             const locationStr = deliveryLocation ? `\nLocation: ${deliveryLocation.pincode}` : "";
-            const message = `Product Available: ${selectedItem.name} (${item.productIdentifier})\nPrice: ₹${priceStr}\nStatus: Available (${current.availableQuantity} in stock)${locationStr}\nTime: ${formatTimestamp(now)}`;
+            const message = `Product Available: ${selectedItem.name} (${selectedItem.sku})\nPrice: ₹${priceStr}\nStatus: Available (${current.availableQuantity} in stock)${locationStr}\nTime: ${formatTimestamp(now)}`;
             try {
               await this.notification.notify(message);
             } catch (err) {
@@ -67,10 +67,10 @@ export class WishlistMonitor {
           }
 
           if (isAvailable !== wasAvailable) {
-            this.setPreviousState(item.productIdentifier, currentPincode, isAvailable, now);
+            this.setPreviousState(item.id, currentPincode, isAvailable, now);
           }
         } catch (error) {
-          this.logger.error("Monitor failed to process item", { productIdentifier: item.productIdentifier, error: error instanceof Error ? error.message : String(error) });
+          this.logger.error("Monitor failed to process item", { wishlistId: item.id, error: error instanceof Error ? error.message : String(error) });
         }
       }
     } catch (error) {
@@ -78,18 +78,18 @@ export class WishlistMonitor {
     }
   }
 
-  private getPreviousState(productIdentifier: string, pincode: string): boolean {
+  private getPreviousState(wishlistId: string, pincode: string): boolean {
     using database = new DatabaseSync(this.databasePath);
-    const row = database.prepare("SELECT available FROM availability_state WHERE product_identifier = ? AND pincode = ?").get(productIdentifier, pincode) as { available: number } | undefined;
+    const row = database.prepare("SELECT available FROM availability_state WHERE wishlist_id = ? AND pincode = ?").get(wishlistId, pincode) as { available: number } | undefined;
     return row !== undefined && row.available === 1;
   }
 
-  private setPreviousState(productIdentifier: string, pincode: string, available: boolean, timestamp: Date): void {
+  private setPreviousState(wishlistId: string, pincode: string, available: boolean, timestamp: Date): void {
     using database = new DatabaseSync(this.databasePath);
-    database.prepare(`INSERT INTO availability_state (product_identifier, pincode, available, updated_at)
+    database.prepare(`INSERT INTO availability_state (wishlist_id, pincode, available, updated_at)
       VALUES (?, ?, ?, ?)
-      ON CONFLICT(product_identifier, pincode) DO UPDATE SET
+      ON CONFLICT(wishlist_id, pincode) DO UPDATE SET
       available = excluded.available,
-      updated_at = excluded.updated_at`).run(productIdentifier, pincode, Number(available), timestamp.toISOString());
+      updated_at = excluded.updated_at`).run(wishlistId, pincode, Number(available), timestamp.toISOString());
   }
 }

@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SimpleItemSelector } from "../src/ai/decision.js";
+import { LocalProductMatcher } from "../src/ai/decision.js";
 import { SafeAutomationService } from "../src/app.js";
 import { PurchaseRules } from "../src/automation/rules.js";
-import type { AvailabilityProvider, ProductCatalogProvider } from "../src/integrations/providers.js";
+import type { AvailabilityProvider, ProductSearchProvider } from "../src/integrations/providers.js";
 import type { Logger } from "../src/logging.js";
 import { DecisionReason, type CatalogItem, type EligibilityLimits, type WishlistItem } from "../src/models.js";
 import { DecisionRepository } from "../src/storage/sqlite.js";
@@ -24,7 +24,7 @@ afterEach(() => directories.splice(0).forEach((directory) => rmSync(directory, {
 
 function wishlist(overrides: Partial<WishlistItem> = {}): WishlistItem {
   return {
-    id: "milk-wishlist", productIdentifier: "milk", productName: "Milk", quantity: 1,
+    id: "milk-wishlist", desiredProductName: "Milk", quantity: 1,
     maximumUnitPricePaise: 10_000, enabled: true, cooldownMinutes: 0, ...overrides,
   };
 }
@@ -40,7 +40,7 @@ function service(items: readonly CatalogItem[], limits: EligibilityLimits = defa
   const orderRepo = new OrderRepository(join(directory, "test.sqlite3"));
   repository.initialize();
   orderRepo.initialize();
-  const catalog: ProductCatalogProvider = { lookupProducts: () => items };
+  const catalog: ProductSearchProvider = { searchProducts: () => items };
   const availability: AvailabilityProvider = { getAvailability: (productIdentifier) => {
     const found = items.find((candidate) => candidate.sku === productIdentifier);
     return found === undefined ? undefined : { productIdentifier, available: found.available, availableQuantity: found.availableQuantity };
@@ -52,7 +52,7 @@ function service(items: readonly CatalogItem[], limits: EligibilityLimits = defa
   };
   const location = new LocationRepository(join(directory, "test.sqlite3"));
   location.initialize();
-  return new SafeAutomationService(catalog, availability, new SimpleItemSelector(), new PurchaseRules(limits), repository, mockHistory, location, silentLogger);
+  return new SafeAutomationService(catalog, availability, new LocalProductMatcher(), new PurchaseRules(limits), repository, mockHistory, location, silentLogger);
 }
 
 describe("local purchase eligibility engine", () => {
@@ -87,17 +87,17 @@ describe("local purchase eligibility engine", () => {
 
   it("rejects when the daily budget would be exceeded", () => {
     const engine = service([item()], { ...defaultLimits, dailySpendingLimitPaise: 9000 });
-    expect(engine.evaluateWishlistItem(wishlist({ id: "first", productIdentifier: "first", productName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect(engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
       .toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ id: "second", productIdentifier: "second", productName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect(engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
       .toBe(DecisionReason.DAILY_BUDGET_EXCEEDED);
   });
 
   it("rejects when the monthly budget would be exceeded", () => {
     const engine = service([item()], { ...defaultLimits, dailySpendingLimitPaise: 50_000, monthlySpendingLimitPaise: 9000 });
-    expect(engine.evaluateWishlistItem(wishlist({ id: "first", productIdentifier: "first", productName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect(engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
       .toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ id: "second", productIdentifier: "second", productName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect(engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
       .toBe(DecisionReason.MONTHLY_BUDGET_EXCEEDED);
   });
 
@@ -121,7 +121,7 @@ describe("local purchase eligibility engine", () => {
 
   it("evaluates multiple wishlist items and records each local decision", () => {
     const engine = service([item(), item({ sku: "banana", name: "Bananas", pricePaise: 3000 })], { ...defaultLimits, duplicateOrderWindowMinutes: 0 });
-    const decisions = engine.evaluateWishlist([wishlist(), wishlist({ id: "banana-wishlist", productIdentifier: "banana", productName: "Bananas" })], NOW);
+    const decisions = engine.evaluateWishlist([wishlist(), wishlist({ id: "banana-wishlist", desiredProductName: "Bananas" })], NOW);
     expect(decisions.map((decision) => decision.reason)).toEqual([DecisionReason.APPROVED, DecisionReason.APPROVED]);
   });
 });

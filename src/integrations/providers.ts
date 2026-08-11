@@ -1,5 +1,9 @@
 import type { CatalogItem, DeliveryLocation, WishlistItem } from "../models.js";
 
+export interface ProductSearchProvider {
+  searchProducts(query: string, location?: DeliveryLocation): readonly CatalogItem[];
+}
+
 /** Product lookup boundary. Implementations may only return catalog data. */
 export interface ProductCatalogProvider {
   lookupProducts(query: string): readonly CatalogItem[];
@@ -17,7 +21,7 @@ export interface AvailabilityProvider {
 }
 
 /** A local provider can implement both contracts, but callers depend on each interface separately. */
-export interface CatalogAvailabilityProvider extends ProductCatalogProvider, AvailabilityProvider {}
+export interface CatalogAvailabilityProvider extends ProductCatalogProvider, AvailabilityProvider, ProductSearchProvider {}
 
 export interface WishlistProvider {
   list(): readonly WishlistItem[] | Promise<readonly WishlistItem[]>;

@@ -1,4 +1,4 @@
-import { SimpleItemSelector } from "./ai/decision.js";
+import { LocalProductMatcher } from "./ai/decision.js";
 import { SafeAutomationService } from "./app.js";
 import { cliUsage, runCatalogCommand, runLocationCommand, runWishlistCommand } from "./cli.js";
 import { PurchaseRules } from "./automation/rules.js";
@@ -30,13 +30,13 @@ try {
   const location = new LocationRepository(settings.databasePath);
   decisions.initialize(); orders.initialize(); wishlist.initialize(); location.initialize();
   const catalogProvider = new MockBlinkitCatalog(settings.databasePath);
-  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(settings.eligibilityLimits), decisions, orders, location, logger);
+  const service = new SafeAutomationService(catalogProvider, catalogProvider, new LocalProductMatcher(), new PurchaseRules(settings.eligibilityLimits), decisions, orders, location, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   const worker = new WishlistWorker(wishlist, service, orderService, logger);
   const notificationProvider = settings.notificationProvider === "telegram" && settings.telegramBotToken && settings.telegramChatId
     ? new TelegramNotificationProvider(settings.telegramBotToken, settings.telegramChatId)
     : new MockNotificationProvider(ui);
-  const monitor = new WishlistMonitor(wishlist, catalogProvider, catalogProvider, new SimpleItemSelector(), notificationProvider, location, settings.databasePath, logger);
+  const monitor = new WishlistMonitor(wishlist, catalogProvider, catalogProvider, new LocalProductMatcher(), notificationProvider, location, settings.databasePath, logger);
   monitor.initialize();
   const compositeWorker = {
     runOnce: async () => {

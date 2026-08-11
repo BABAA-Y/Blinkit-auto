@@ -29,7 +29,7 @@ function repository(): WishlistRepository {
 describe("wishlist CLI management", () => {
   it("adds, lists, and removes a wishlist item", () => {
     const wishlist = repository();
-    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk (1 L)", "2", "70.00", "15"], wishlist, ui);
+    runWishlistCommand(["add", "milk", "Milk", "2", "70.00", "15"], wishlist, ui);
     expect(wishlist.list()).toMatchObject([{ id: "milk", quantity: 2, maximumUnitPricePaise: 7000, cooldownMinutes: 15, enabled: true }]);
     runWishlistCommand(["list"], wishlist, ui); expect(events.at(-1)).toBe("[TABLE] Rows: 1");
     runWishlistCommand(["remove", "milk"], wishlist, ui); expect(wishlist.list()).toEqual([]);
@@ -37,7 +37,7 @@ describe("wishlist CLI management", () => {
 
   it("enables and disables wishlist items", () => {
     const wishlist = repository();
-    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk", "1", "70", "0", "disabled"], wishlist, ui);
+    runWishlistCommand(["add", "milk", "Milk", "1", "70", "0", "disabled"], wishlist, ui);
     expect(wishlist.list()[0]?.enabled).toBe(false);
     runWishlistCommand(["enable", "milk"], wishlist, ui); expect(wishlist.list()[0]?.enabled).toBe(true);
     runWishlistCommand(["disable", "milk"], wishlist, ui); expect(wishlist.list()[0]?.enabled).toBe(false);
@@ -45,9 +45,9 @@ describe("wishlist CLI management", () => {
 
   it("rejects invalid wishlist values", () => {
     const wishlist = repository();
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "0", "70", "0"], wishlist, ui)).toThrow("positive integer");
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "-1", "0"], wishlist, ui)).toThrow("non-negative decimal");
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "70", "-1"], wishlist, ui)).toThrow("non-negative integer");
+    expect(() => runWishlistCommand(["add", "milk", "Milk", "0", "70", "0"], wishlist, ui)).toThrow("positive integer");
+    expect(() => runWishlistCommand(["add", "milk", "Milk", "1", "-1", "0"], wishlist, ui)).toThrow("non-negative decimal");
+    expect(() => runWishlistCommand(["add", "milk", "Milk", "1", "70", "-1"], wishlist, ui)).toThrow("non-negative integer");
   });
 });
 

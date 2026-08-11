@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WishlistMonitor } from "../src/monitor.js";
-import { SimpleItemSelector } from "../src/ai/decision.js";
+import { LocalProductMatcher } from "../src/ai/decision.js";
 import { MockNotificationProvider } from "../src/notifications/mock.js";
-import type { AvailabilityProvider, ProductCatalogProvider, WishlistProvider } from "../src/integrations/providers.js";
+import type { AvailabilityProvider, ProductSearchProvider, WishlistProvider } from "../src/integrations/providers.js";
 import type { Logger } from "../src/logging.js";
 import type { CatalogItem, WishlistItem } from "../src/models.js";
 import { DatabaseSync } from "node:sqlite";
@@ -21,7 +21,7 @@ function monitorSetup(items: CatalogItem[], wishlistItems: WishlistItem[]) {
   const databasePath = join(directory, "test.sqlite3");
 
   const wishlist: WishlistProvider = { list: () => wishlistItems };
-  const catalog: ProductCatalogProvider = { lookupProducts: (query) => items.filter((item) => item.sku === query) };
+  const catalog: ProductSearchProvider = { searchProducts: (query) => items.filter((item) => item.sku === query || item.name === query) };
   const availability: AvailabilityProvider = {
     getAvailability: (productIdentifier) => {
       const found = items.find((candidate) => candidate.sku === productIdentifier);
@@ -32,18 +32,18 @@ function monitorSetup(items: CatalogItem[], wishlistItems: WishlistItem[]) {
   const location = new LocationRepository(databasePath);
   location.initialize();
 
-  const monitor = new WishlistMonitor(wishlist, catalog, availability, new SimpleItemSelector(), notification, location, databasePath, logger);
+  const monitor = new WishlistMonitor(wishlist, catalog, availability, new LocalProductMatcher(), notification, location, databasePath, logger);
   monitor.initialize();
 
   return { monitor, notification, databasePath, location };
 }
 
-function wItem(id: string, productIdentifier: string, enabled = true): WishlistItem {
-  return { id, productIdentifier, productName: "Product", quantity: 1, maximumUnitPricePaise: 10000, enabled, cooldownMinutes: 0 };
+function wItem(id: string, desiredProductName: string, enabled = true): WishlistItem {
+  return { id, desiredProductName, quantity: 1, maximumUnitPricePaise: 10000, enabled, cooldownMinutes: 0 };
 }
 
 function cItem(sku: string, available: boolean, availableQuantity: number): CatalogItem {
-  return { sku, name: "Product", pricePaise: 5000, available, availableQuantity };
+  return { sku, name: sku, pricePaise: 5000, available, availableQuantity };
 }
 
 describe("WishlistMonitor", () => {

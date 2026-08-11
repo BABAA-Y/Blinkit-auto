@@ -6,7 +6,7 @@ import { LocationRepository } from "../src/storage/location.js";
 import { MockBlinkitCatalog } from "../src/integrations/blinkit.js";
 import { WishlistMonitor } from "../src/monitor.js";
 import { MockNotificationProvider } from "../src/notifications/mock.js";
-import { SimpleItemSelector } from "../src/ai/decision.js";
+import { LocalProductMatcher } from "../src/ai/decision.js";
 import type { WishlistProvider } from "../src/integrations/providers.js";
 
 const directories: string[] = [];
@@ -58,11 +58,11 @@ describe("Location-aware features", () => {
     catalog.setAvailability("mock-banana-1", true, 5, "248001");
 
     const wishlist: WishlistProvider = {
-      list: () => [{ id: "w1", productIdentifier: "mock-banana-1", productName: "Banana", quantity: 1, maximumUnitPricePaise: 5000, enabled: true, cooldownMinutes: 0 }]
+      list: () => [{ id: "w1", desiredProductName: "Banana", quantity: 1, maximumUnitPricePaise: 5000, enabled: true, cooldownMinutes: 0 }]
     };
 
     const notification = new MockNotificationProvider();
-    const monitor = new WishlistMonitor(wishlist, catalog, catalog, new SimpleItemSelector(), notification, locationRepo, databasePath, { info: () => {}, warn: () => {}, error: () => {} });
+    const monitor = new WishlistMonitor(wishlist, catalog, catalog, new LocalProductMatcher(), notification, locationRepo, databasePath, { info: () => {}, warn: () => {}, error: () => {} });
     monitor.initialize();
 
     await monitor.runOnce();
@@ -86,11 +86,11 @@ describe("Location-aware features", () => {
     catalog.setAvailability("mock-banana-1", false, 0, "110001");
 
     const wishlist: WishlistProvider = {
-      list: () => [{ id: "w1", productIdentifier: "mock-banana-1", productName: "Banana", quantity: 1, maximumUnitPricePaise: 5000, enabled: true, cooldownMinutes: 0 }]
+      list: () => [{ id: "w1", desiredProductName: "Banana", quantity: 1, maximumUnitPricePaise: 5000, enabled: true, cooldownMinutes: 0 }]
     };
 
     const notification = new MockNotificationProvider();
-    const monitor = new WishlistMonitor(wishlist, catalog, catalog, new SimpleItemSelector(), notification, locationRepo, databasePath, { info: () => {}, warn: () => {}, error: () => {} });
+    const monitor = new WishlistMonitor(wishlist, catalog, catalog, new LocalProductMatcher(), notification, locationRepo, databasePath, { info: () => {}, warn: () => {}, error: () => {} });
     monitor.initialize();
 
     await monitor.runOnce();

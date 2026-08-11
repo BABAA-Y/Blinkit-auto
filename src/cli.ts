@@ -15,10 +15,12 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
       const items = repository.list();
       ui.header("Local Wishlist");
       ui.printTable(
-        ["ID", "Product", "Qty", "Max Price", "Cooldown", "Enabled"],
+        ["ID", "Desired Product", "Brand", "Keywords", "Qty", "Max Price", "Cooldown", "Enabled"],
         items.map(i => [
           i.id,
-          `${i.productName} (${i.productIdentifier})`,
+          i.desiredProductName,
+          i.brand || "-",
+          i.keywords ? i.keywords.join(", ") : "-",
           String(i.quantity),
           formatCurrencyPaise(i.maximumUnitPricePaise),
           `${i.cooldownMinutes}m`,
@@ -28,11 +30,13 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
       return;
     }
     case "add": {
-      if (values.length !== 6 && values.length !== 7) throw new Error(wishlistUsage());
-      const [id, productIdentifier, productName, quantity, maximumUnitPrice, cooldown, enabled = "enabled"] = values;
+      if (values.length < 5 || values.length > 8) throw new Error(wishlistUsage());
+      const [id, desiredProductName, quantity, maximumUnitPrice, cooldown, enabled = "enabled", brandStr, keywordsStr] = values;
+      const brand = brandStr && brandStr !== "-" ? brandStr : undefined;
+      const keywords = keywordsStr && keywordsStr !== "-" ? keywordsStr.split(",").map(k => k.trim()) : undefined;
       repository.save({
-        id: requireValue(id, "id"), productIdentifier: requireValue(productIdentifier, "product identifier"),
-        productName: requireValue(productName, "product name"), quantity: positiveInteger(requireValue(quantity, "quantity"), "quantity"),
+        id: requireValue(id, "id"), desiredProductName: requireValue(desiredProductName, "desired product name"),
+        brand, keywords, quantity: positiveInteger(requireValue(quantity, "quantity"), "quantity"),
         maximumUnitPricePaise: parseNonNegativeMoneyToPaise(requireValue(maximumUnitPrice, "maximum unit price"), "maximum unit price"),
         cooldownMinutes: nonNegativeInteger(requireValue(cooldown, "cooldown"), "cooldown"), enabled: parseEnabled(enabled),
       } satisfies WishlistItem);
@@ -54,7 +58,7 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
 }
 
 export function cliUsage(): string {
-  return "Usage: npm start -- [run-once|run|status|wishlist list|wishlist add <id> <product-id> <product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|catalog list|catalog set-availability <sku> <true|false> <quantity> [pincode]|location set <pincode> [city] [state]|location show]";
+  return "Usage: npm start -- [run-once|run|status|wishlist list|wishlist add <id> <desired-product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled] [brand|-] [keywords|-]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|catalog list|catalog set-availability <sku> <true|false> <quantity> [pincode]|location set <pincode> [city] [state]|location show]";
 }
 
 export function runCatalogCommand(args: readonly string[], catalog: MockBlinkitCatalog, ui: TerminalUI): void {

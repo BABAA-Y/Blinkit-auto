@@ -1,6 +1,6 @@
 import type { ItemSelector } from "./ai/decision.js";
 import { PurchaseRules, type FinalizedOrderHistory } from "./automation/rules.js";
-import type { AvailabilityProvider, ProductCatalogProvider } from "./integrations/providers.js";
+import type { AvailabilityProvider, ProductSearchProvider } from "./integrations/providers.js";
 import type { Logger } from "./logging.js";
 import type { Decision, WishlistItem } from "./models.js";
 import { DecisionRepository } from "./storage/sqlite.js";
@@ -14,7 +14,7 @@ export interface WishlistEvaluationWorkflow {
 /** Orchestrates local eligibility evaluation only; it never purchases anything. */
 export class SafeAutomationService implements WishlistEvaluationWorkflow {
   public constructor(
-    private readonly catalog: ProductCatalogProvider,
+    private readonly catalog: ProductSearchProvider,
     private readonly availability: AvailabilityProvider,
     private readonly selector: ItemSelector,
     private readonly rules: PurchaseRules,
@@ -27,14 +27,15 @@ export class SafeAutomationService implements WishlistEvaluationWorkflow {
   public evaluateWishlistItem(wishlistItem: WishlistItem, now = new Date()): Decision {
     let decision: Decision;
     try {
-      const candidates = this.catalog.lookupProducts(wishlistItem.productIdentifier);
-      const selectedItem = this.selector.select(wishlistItem.productIdentifier, wishlistItem.productName, candidates);
       const deliveryLocation = this.location.get();
+      const candidates = this.catalog.searchProducts(wishlistItem.desiredProductName, deliveryLocation);
+      const selectedItem = this.selector.select(wishlistItem, candidates);
+      
       const currentAvailability = selectedItem === undefined ? undefined : this.availability.getAvailability(selectedItem.sku, deliveryLocation);
       const item = selectedItem === undefined ? undefined : { ...selectedItem, available: currentAvailability?.available ?? false, availableQuantity: currentAvailability?.availableQuantity ?? 0 };
       decision = this.rules.evaluate(wishlistItem, item, this.finalizedOrders, now);
     } catch (error) {
-      this.logger.warn("Provider data rejected", { error: diagnosticMessage(error), productIdentifier: wishlistItem.productIdentifier });
+      this.logger.warn("Provider data rejected", { error: diagnosticMessage(error), desiredProductName: wishlistItem.desiredProductName });
       decision = this.rules.rejectInvalidProviderData(wishlistItem, now);
     }
     this.decisions.record(decision);

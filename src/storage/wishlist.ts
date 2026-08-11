@@ -10,10 +10,17 @@ export class WishlistRepository {
   public initialize(): void {
     mkdirSync(dirname(this.databasePath), { recursive: true });
     using database = new DatabaseSync(this.databasePath);
+    
+    const info = database.prepare("PRAGMA table_info(wishlist_items)").all() as any[];
+    if (info.length > 0 && !info.some(c => c.name === "desired_product_name")) {
+      database.exec("DROP TABLE wishlist_items");
+    }
+
     database.exec(`CREATE TABLE IF NOT EXISTS wishlist_items (
       id TEXT PRIMARY KEY,
-      product_identifier TEXT NOT NULL,
-      product_name TEXT NOT NULL,
+      desired_product_name TEXT NOT NULL,
+      brand TEXT,
+      keywords TEXT,
       quantity INTEGER NOT NULL CHECK(quantity > 0),
       maximum_unit_price_paise INTEGER NOT NULL CHECK(maximum_unit_price_paise >= 0),
       enabled INTEGER NOT NULL,
@@ -25,26 +32,28 @@ export class WishlistRepository {
     validateWishlistItem(item);
     using database = new DatabaseSync(this.databasePath);
     database.prepare(`INSERT INTO wishlist_items (
-      id, product_identifier, product_name, quantity, maximum_unit_price_paise, enabled, cooldown_minutes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      id, desired_product_name, brand, keywords, quantity, maximum_unit_price_paise, enabled, cooldown_minutes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
-      product_identifier = excluded.product_identifier,
-      product_name = excluded.product_name,
+      desired_product_name = excluded.desired_product_name,
+      brand = excluded.brand,
+      keywords = excluded.keywords,
       quantity = excluded.quantity,
       maximum_unit_price_paise = excluded.maximum_unit_price_paise,
       enabled = excluded.enabled,
       cooldown_minutes = excluded.cooldown_minutes`).run(
-      item.id, item.productIdentifier, item.productName, item.quantity,
+      item.id, item.desiredProductName, item.brand || null, item.keywords ? JSON.stringify(item.keywords) : null, item.quantity,
       item.maximumUnitPricePaise, Number(item.enabled), item.cooldownMinutes,
     );
   }
 
   public list(): WishlistItem[] {
     using database = new DatabaseSync(this.databasePath);
-    const rows = database.prepare(`SELECT id, product_identifier, product_name, quantity,
+    const rows = database.prepare(`SELECT id, desired_product_name, brand, keywords, quantity,
       maximum_unit_price_paise, enabled, cooldown_minutes FROM wishlist_items ORDER BY id`).all() as unknown as WishlistRow[];
     return rows.map((row) => ({
-      id: row.id, productIdentifier: row.product_identifier, productName: row.product_name,
+      id: row.id, desiredProductName: row.desired_product_name, brand: row.brand || undefined, 
+      keywords: row.keywords ? JSON.parse(row.keywords) : undefined,
       quantity: row.quantity, maximumUnitPricePaise: row.maximum_unit_price_paise,
       enabled: row.enabled === 1, cooldownMinutes: row.cooldown_minutes,
     }));
@@ -70,8 +79,9 @@ export class WishlistRepository {
 
 interface WishlistRow {
   id: string;
-  product_identifier: string;
-  product_name: string;
+  desired_product_name: string;
+  brand: string | null;
+  keywords: string | null;
   quantity: number;
   maximum_unit_price_paise: number;
   enabled: number;
@@ -79,8 +89,8 @@ interface WishlistRow {
 }
 
 function validateWishlistItem(item: WishlistItem): void {
-  if (item.id.trim() === "" || item.productIdentifier.trim() === "" || item.productName.trim() === "") {
-    throw new Error("Wishlist item id, product identifier, and product name are required");
+  if (item.id.trim() === "" || item.desiredProductName.trim() === "") {
+    throw new Error("Wishlist item id and desired product name are required");
   }
   if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) throw new Error("Wishlist quantity must be a positive integer");
   if (!Number.isSafeInteger(item.maximumUnitPricePaise) || item.maximumUnitPricePaise < 0) {

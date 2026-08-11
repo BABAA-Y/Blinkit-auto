@@ -8,8 +8,9 @@ export interface CatalogItem {
 
 export interface WishlistItem {
   id: string;
-  productIdentifier: string;
-  productName: string;
+  desiredProductName: string;
+  brand?: string;
+  keywords?: string[];
   quantity: number;
   maximumUnitPricePaise: number;
   enabled: boolean;

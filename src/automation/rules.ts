@@ -19,7 +19,8 @@ export class PurchaseRules {
   public constructor(private readonly limits: EligibilityLimits) {}
 
   public evaluate(wishlistItem: WishlistItem, item: CatalogItem | undefined, history: FinalizedOrderHistory, now: Date): Decision {
-    const base = { wishlistItemId: wishlistItem.id, productIdentifier: wishlistItem.productIdentifier, quantity: wishlistItem.quantity, decidedAt: now };
+    const productIdentifier = item ? item.sku : "";
+    const base = { wishlistItemId: wishlistItem.id, productIdentifier, quantity: wishlistItem.quantity, decidedAt: now };
     const reject = (reason: DecisionReason, selectedItem?: CatalogItem, orderValuePaise?: number): Decision => this.issue({
       ...base, approved: false, reason, item: selectedItem, unitPricePaise: selectedItem?.pricePaise, orderValuePaise,
     });
@@ -36,12 +37,12 @@ export class PurchaseRules {
     if (history.finalizedSpendingBetween(startOfDay(now), now) + orderValuePaise > this.limits.dailySpendingLimitPaise) return reject(DecisionReason.DAILY_BUDGET_EXCEEDED, item, orderValuePaise);
     if (history.finalizedSpendingBetween(startOfMonth(now), now) + orderValuePaise > this.limits.monthlySpendingLimitPaise) return reject(DecisionReason.MONTHLY_BUDGET_EXCEEDED, item, orderValuePaise);
     if (isWithinMinutes(history.latestFinalizedForWishlist(wishlistItem.id), now, wishlistItem.cooldownMinutes)) return reject(DecisionReason.COOLDOWN_ACTIVE, item, orderValuePaise);
-    if (isWithinMinutes(history.latestFinalizedForProduct(wishlistItem.productIdentifier), now, this.limits.duplicateOrderWindowMinutes)) return reject(DecisionReason.DUPLICATE_ORDER, item, orderValuePaise);
+    if (isWithinMinutes(history.latestFinalizedForProduct(item.sku), now, this.limits.duplicateOrderWindowMinutes)) return reject(DecisionReason.DUPLICATE_ORDER, item, orderValuePaise);
     return this.issue({ ...base, approved: true, reason: DecisionReason.APPROVED, item, unitPricePaise: item.pricePaise, orderValuePaise });
   }
 
   public rejectInvalidProviderData(wishlistItem: WishlistItem, now: Date): Decision {
-    return this.issue({ wishlistItemId: wishlistItem.id, productIdentifier: wishlistItem.productIdentifier, quantity: wishlistItem.quantity, decidedAt: now, approved: false, reason: DecisionReason.INVALID_PROVIDER_DATA });
+    return this.issue({ wishlistItemId: wishlistItem.id, productIdentifier: "", quantity: wishlistItem.quantity, decidedAt: now, approved: false, reason: DecisionReason.INVALID_PROVIDER_DATA });
   }
 
   private issue(decision: Decision): Decision { trustedEligibilityDecisions.add(decision); return decision; }

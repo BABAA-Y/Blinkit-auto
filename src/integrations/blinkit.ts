@@ -105,6 +105,13 @@ export class MockBlinkitCatalog implements CatalogAvailabilityProvider {
     );
   }
 
+  public searchProducts(query: string, location?: DeliveryLocation): readonly CatalogItem[] {
+    const normalized = query.toLocaleLowerCase();
+    return this.getItems(location?.pincode ?? "*").filter((item) =>
+      item.sku.toLocaleLowerCase().includes(normalized) || item.name.toLocaleLowerCase().includes(normalized),
+    );
+  }
+
   public getAvailability(productIdentifier: string, location?: DeliveryLocation): ProductAvailability | undefined {
     const items = this.getItems(location?.pincode ?? "*");
     const item = items.find((candidate) => candidate.sku === productIdentifier);
