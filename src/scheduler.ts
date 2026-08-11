@@ -31,9 +31,9 @@ export class WishlistScheduler {
     this.logger.info("Wishlist scheduler stopped");
   }
 
-  private runWorker(): void {
+  private async runWorker(): Promise<void> {
     try {
-      this.worker.runOnce();
+      await this.worker.runOnce();
     } catch (error) {
       this.logger.error("Scheduled worker run failed", { error: diagnosticMessage(error) });
     }

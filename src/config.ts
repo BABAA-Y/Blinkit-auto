@@ -6,6 +6,9 @@ export interface Settings {
   logLevel: string;
   schedulerIntervalMs: number;
   eligibilityLimits: EligibilityLimits;
+  notificationProvider: "mock" | "telegram";
+  telegramBotToken?: string;
+  telegramChatId?: string;
 }
 
 export function settingsFromEnvironment(environment: NodeJS.ProcessEnv = process.env, projectDirectory = process.cwd()): Settings {
@@ -25,6 +28,9 @@ export function settingsFromEnvironment(environment: NodeJS.ProcessEnv = process
       monthlySpendingLimitPaise: parseNonNegativeMoneyToPaise(environment.BLINKIT_AUTO_MONTHLY_SPENDING_LIMIT ?? "10000.00", "BLINKIT_AUTO_MONTHLY_SPENDING_LIMIT"),
       duplicateOrderWindowMinutes: nonNegativeInteger(environment.BLINKIT_AUTO_DUPLICATE_WINDOW_MINUTES ?? "60", "BLINKIT_AUTO_DUPLICATE_WINDOW_MINUTES"),
     },
+    notificationProvider: (environment.BLINKIT_AUTO_NOTIFICATION_PROVIDER as "mock" | "telegram") ?? "mock",
+    telegramBotToken: environment.BLINKIT_AUTO_TELEGRAM_BOT_TOKEN,
+    telegramChatId: environment.BLINKIT_AUTO_TELEGRAM_CHAT_ID,
   };
 }
 

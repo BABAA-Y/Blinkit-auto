@@ -1,4 +1,4 @@
-import type { CatalogItem } from "../models.js";
+import type { CatalogItem, WishlistItem } from "../models.js";
 
 /** Product lookup boundary. Implementations may only return catalog data. */
 export interface ProductCatalogProvider {
@@ -18,3 +18,12 @@ export interface AvailabilityProvider {
 
 /** A local provider can implement both contracts, but callers depend on each interface separately. */
 export interface CatalogAvailabilityProvider extends ProductCatalogProvider, AvailabilityProvider {}
+
+export interface WishlistProvider {
+  list(): readonly WishlistItem[] | Promise<readonly WishlistItem[]>;
+}
+
+export interface NotificationProvider {
+  notify(message: string): Promise<void> | void;
+}
+
