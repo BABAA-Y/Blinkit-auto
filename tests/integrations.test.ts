@@ -4,12 +4,12 @@ import { MockOrderSubmissionProvider, type OrderSubmissionProvider } from "../sr
 import type { AvailabilityProvider, ProductCatalogProvider } from "../src/integrations/providers.js";
 
 describe("mock provider interfaces", () => {
-  it("uses the mock catalog through independent lookup and availability interfaces", () => {
+  it("uses the mock catalog through independent lookup and availability interfaces", async () => {
     const mock = new MockBlinkitCatalog();
     const catalog: ProductCatalogProvider = mock;
     const availability: AvailabilityProvider = mock;
-    expect(catalog.lookupProducts("milk").map((item) => item.sku).sort()).toEqual(["mock-milk-1", "mock-milk-2"].sort());
-    expect(availability.getAvailability("mock-milk-1")).toMatchObject({ available: true, availableQuantity: 5 });
+    expect((await catalog.lookupProducts("milk")).map((item) => item.sku).sort()).toEqual(["mock-milk-1", "mock-milk-2"].sort());
+    expect(await availability.getAvailability("mock-milk-1")).toMatchObject({ available: true, availableQuantity: 5 });
   });
 
   it("uses mock order submission only through the submission interface", () => {

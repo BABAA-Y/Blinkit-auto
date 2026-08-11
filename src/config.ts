@@ -9,6 +9,10 @@ export interface Settings {
   notificationProvider: "mock" | "telegram";
   telegramBotToken?: string;
   telegramChatId?: string;
+  catalogProvider: "mock" | "authorized";
+  apiEndpoint?: string;
+  apiKey?: string;
+  apiTimeoutMs: number;
 }
 
 export function settingsFromEnvironment(environment: NodeJS.ProcessEnv = process.env, projectDirectory = process.cwd()): Settings {
@@ -31,6 +35,10 @@ export function settingsFromEnvironment(environment: NodeJS.ProcessEnv = process
     notificationProvider: (environment.BLINKIT_AUTO_NOTIFICATION_PROVIDER as "mock" | "telegram") ?? "mock",
     telegramBotToken: environment.BLINKIT_AUTO_TELEGRAM_BOT_TOKEN,
     telegramChatId: environment.BLINKIT_AUTO_TELEGRAM_CHAT_ID,
+    catalogProvider: (environment.BLINKIT_AUTO_CATALOG_PROVIDER as "mock" | "authorized") ?? "mock",
+    apiEndpoint: environment.BLINKIT_AUTO_API_ENDPOINT,
+    apiKey: environment.BLINKIT_AUTO_API_KEY,
+    apiTimeoutMs: positiveInteger(environment.BLINKIT_AUTO_API_TIMEOUT_MS ?? "5000", "BLINKIT_AUTO_API_TIMEOUT_MS"),
   };
 }
 

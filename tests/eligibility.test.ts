@@ -56,72 +56,72 @@ function service(items: readonly CatalogItem[], limits: EligibilityLimits = defa
 }
 
 describe("local purchase eligibility engine", () => {
-  it("approves an available item within all budgets", () => {
-    expect(service([item()]).evaluateWishlistItem(wishlist(), NOW).reason).toBe(DecisionReason.APPROVED);
+  it("approves an available item within all budgets", async () => {
+    expect((await service([item()]).evaluateWishlistItem(wishlist(), NOW)).reason).toBe(DecisionReason.APPROVED);
   });
 
-  it("rejects a wishlist product that does not exist in the catalog", () => {
-    expect(service([]).evaluateWishlistItem(wishlist(), NOW).reason).toBe(DecisionReason.PRODUCT_NOT_FOUND);
+  it("rejects a wishlist product that does not exist in the catalog", async () => {
+    expect((await service([]).evaluateWishlistItem(wishlist(), NOW)).reason).toBe(DecisionReason.PRODUCT_NOT_FOUND);
   });
 
-  it("rejects an unavailable item", () => {
-    expect(service([item({ available: false, availableQuantity: 0 })]).evaluateWishlistItem(wishlist(), NOW).reason)
+  it("rejects an unavailable item", async () => {
+    expect((await service([item({ available: false, availableQuantity: 0 })]).evaluateWishlistItem(wishlist(), NOW)).reason)
       .toBe(DecisionReason.OUT_OF_STOCK);
   });
 
-  it("rejects a price above the wishlist maximum", () => {
-    expect(service([item({ pricePaise: 5001 })]).evaluateWishlistItem(wishlist({ maximumUnitPricePaise: 5000 }), NOW).reason)
+  it("rejects a price above the wishlist maximum", async () => {
+    expect((await service([item({ pricePaise: 5001 })]).evaluateWishlistItem(wishlist({ maximumUnitPricePaise: 5000 }), NOW)).reason)
       .toBe(DecisionReason.PRICE_TOO_HIGH);
   });
 
-  it("rejects insufficient quantity", () => {
-    expect(service([item({ availableQuantity: 1 })]).evaluateWishlistItem(wishlist({ quantity: 2 }), NOW).reason)
+  it("rejects insufficient quantity", async () => {
+    expect((await service([item({ availableQuantity: 1 })]).evaluateWishlistItem(wishlist({ quantity: 2 }), NOW)).reason)
       .toBe(DecisionReason.INSUFFICIENT_QUANTITY);
   });
 
-  it("rejects an order above its maximum value", () => {
+  it("rejects an order above its maximum value", async () => {
     const limits = { ...defaultLimits, maximumOrderValuePaise: 9000 };
-    expect(service([item() ], limits).evaluateWishlistItem(wishlist({ quantity: 2 }), NOW).reason)
+    expect((await service([item() ], limits).evaluateWishlistItem(wishlist({ quantity: 2 }), NOW)).reason)
       .toBe(DecisionReason.MAX_ORDER_VALUE_EXCEEDED);
   });
 
-  it("rejects when the daily budget would be exceeded", () => {
+  it("rejects when the daily budget would be exceeded", async () => {
     const engine = service([item()], { ...defaultLimits, dailySpendingLimitPaise: 9000 });
-    expect(engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW)).reason)
       .toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW)).reason)
       .toBe(DecisionReason.DAILY_BUDGET_EXCEEDED);
   });
 
-  it("rejects when the monthly budget would be exceeded", () => {
+  it("rejects when the monthly budget would be exceeded", async () => {
     const engine = service([item()], { ...defaultLimits, dailySpendingLimitPaise: 50_000, monthlySpendingLimitPaise: 9000 });
-    expect(engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ id: "first", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW)).reason)
       .toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ id: "second", desiredProductName: "Milk", cooldownMinutes: 0 }), NOW)).reason)
       .toBe(DecisionReason.MONTHLY_BUDGET_EXCEEDED);
   });
 
-  it("rejects a wishlist item during its cooldown", () => {
+  it("rejects a wishlist item during its cooldown", async () => {
     const engine = service([item()], { ...defaultLimits, duplicateOrderWindowMinutes: 0 });
-    expect(engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 30 }), NOW).reason).toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 30 }), new Date(NOW.getTime() + 60_000)).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 30 }), NOW)).reason).toBe(DecisionReason.APPROVED);
+    expect((await engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 30 }), new Date(NOW.getTime() + 60_000))).reason)
       .toBe(DecisionReason.COOLDOWN_ACTIVE);
   });
 
-  it("rejects a recent duplicate order", () => {
+  it("rejects a recent duplicate order", async () => {
     const engine = service([item()]);
-    expect(engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 0 }), NOW).reason).toBe(DecisionReason.APPROVED);
-    expect(engine.evaluateWishlistItem(wishlist({ id: "another-wishlist", cooldownMinutes: 0 }), new Date(NOW.getTime() + 60_000)).reason)
+    expect((await engine.evaluateWishlistItem(wishlist({ cooldownMinutes: 0 }), NOW)).reason).toBe(DecisionReason.APPROVED);
+    expect((await engine.evaluateWishlistItem(wishlist({ id: "another-wishlist", cooldownMinutes: 0 }), new Date(NOW.getTime() + 60_000))).reason)
       .toBe(DecisionReason.DUPLICATE_ORDER);
   });
 
-  it("rejects a disabled wishlist item", () => {
-    expect(service([item()]).evaluateWishlistItem(wishlist({ enabled: false }), NOW).reason).toBe(DecisionReason.DISABLED);
+  it("rejects a disabled wishlist item", async () => {
+    expect((await service([item()]).evaluateWishlistItem(wishlist({ enabled: false }), NOW)).reason).toBe(DecisionReason.DISABLED);
   });
 
-  it("evaluates multiple wishlist items and records each local decision", () => {
+  it("evaluates multiple wishlist items and records each local decision", async () => {
     const engine = service([item(), item({ sku: "banana", name: "Bananas", pricePaise: 3000 })], { ...defaultLimits, duplicateOrderWindowMinutes: 0 });
-    const decisions = engine.evaluateWishlist([wishlist(), wishlist({ id: "banana-wishlist", desiredProductName: "Bananas" })], NOW);
+    const decisions = await engine.evaluateWishlist([wishlist(), wishlist({ id: "banana-wishlist", desiredProductName: "Bananas" })], NOW);
     expect(decisions.map((decision) => decision.reason)).toEqual([DecisionReason.APPROVED, DecisionReason.APPROVED]);
   });
 });

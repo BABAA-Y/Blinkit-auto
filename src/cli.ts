@@ -6,8 +6,9 @@ import type { MockBlinkitCatalog } from "./integrations/blinkit.js";
 import type { LocationRepository } from "./storage/location.js";
 import type { TerminalUI } from "./ui/output.js";
 import { formatBoolean, formatCurrencyPaise } from "./ui/formatting.js";
+import { DatabaseSync } from "node:sqlite";
 
-export function runWishlistCommand(args: readonly string[], repository: WishlistRepository, ui: TerminalUI): void {
+export function runWishlistCommand(args: readonly string[], repository: WishlistRepository, ui: TerminalUI, databasePath?: string): void {
   const [operation, ...values] = args;
   switch (operation) {
     case "list": {
@@ -52,16 +53,40 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
     case "disable":
       changeState(repository.setEnabled(requireSingleValue(values, "wishlist disable <id>"), false), "disable", requireSingleValue(values, "wishlist disable <id>"), ui);
       return;
+    case "reset-availability": {
+      requireArgumentCount(values, 2, "wishlist reset-availability <id> <pincode>");
+      if (!databasePath) throw new Error("Database path required for reset-availability");
+      const id = values[0]!;
+      const pincode = values[1]!;
+      using database = new DatabaseSync(databasePath);
+      
+      // Ensure the table exists before attempting to update it, to prevent crashes on fresh installs
+      database.exec(`CREATE TABLE IF NOT EXISTS availability_state (
+        wishlist_id TEXT,
+        pincode TEXT,
+        available INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (wishlist_id, pincode)
+      )`);
+
+      const result = database.prepare("UPDATE availability_state SET available = 0, updated_at = ? WHERE wishlist_id = ? AND pincode = ?").run(new Date().toISOString(), id, pincode);
+      if (result.changes > 0) {
+        ui.success(`Availability state reset to unavailable for wishlist item ${id} at pincode ${pincode}`);
+      } else {
+        ui.warning(`No existing availability state found for wishlist item ${id} at pincode ${pincode}`);
+      }
+      return;
+    }
     default:
       throw new Error(wishlistUsage());
   }
 }
 
 export function cliUsage(): string {
-  return "Usage: npm start -- [run-once|run|status|wishlist list|wishlist add <id> <desired-product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled] [brand|-] [keywords|-]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|catalog list|catalog set-availability <sku> <true|false> <quantity> [pincode]|location set <pincode> [city] [state]|location show]";
+  return "Usage: npm start -- [interactive|run-once|run|status|wishlist list|wishlist add <id> <desired-product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled] [brand|-] [keywords|-]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|wishlist reset-availability <id> <pincode>|catalog list|catalog set-availability <sku> <true|false> <quantity> [pincode]|location set <pincode> [city] [state]|location show]";
 }
 
-export function runCatalogCommand(args: readonly string[], catalog: MockBlinkitCatalog, ui: TerminalUI): void {
+export function runCatalogCommand(args: readonly string[], catalog: any, ui: TerminalUI): void {
   const [operation, ...values] = args;
   switch (operation) {
     case "list": {
@@ -69,13 +94,13 @@ export function runCatalogCommand(args: readonly string[], catalog: MockBlinkitC
       ui.header("Mock Catalog");
       ui.printTable(
         ["SKU", "Name", "Price", "Available", "Qty", "Location"],
-        items.map(i => [
+        items.map((i: any) => [
           i.sku,
           i.name,
           formatCurrencyPaise(i.pricePaise),
           formatBoolean(i.available),
           String(i.availableQuantity),
-          (i as any).pincode || "*"
+          i.pincode || "*"
         ])
       );
       return;

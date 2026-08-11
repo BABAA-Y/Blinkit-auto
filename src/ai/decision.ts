@@ -4,6 +4,20 @@ export interface ItemSelector {
   select(wishlistItem: WishlistItem, candidates: readonly CatalogItem[]): CatalogItem | undefined;
 }
 
+export function buildSearchQuery(item: WishlistItem): string {
+  if (!item.keywords || item.keywords.length === 0) {
+    return item.desiredProductName;
+  }
+  
+  // Prefer multi-word keywords that are likely model names over generic single words
+  const multiWord = item.keywords.filter(k => k.trim().includes(" "));
+  if (multiWord.length > 0) {
+    return multiWord[0]!;
+  }
+  
+  return item.keywords[0]!;
+}
+
 /** Local, deterministic selection; it makes no external AI calls. */
 export class LocalProductMatcher implements ItemSelector {
   public select(wishlistItem: WishlistItem, candidates: readonly CatalogItem[]): CatalogItem | undefined {

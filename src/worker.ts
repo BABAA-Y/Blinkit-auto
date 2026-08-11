@@ -13,9 +13,9 @@ export class WishlistWorker {
     private readonly logger: Logger,
   ) {}
 
-  public runOnce(now = new Date()): Decision[] {
+  public async runOnce(now = new Date()): Promise<Decision[]> {
     const wishlistItems = this.wishlistRepository.list();
-    const decisions = this.automationService.evaluateWishlist(wishlistItems, now);
+    const decisions = await this.automationService.evaluateWishlist(wishlistItems, now);
     for (const decision of decisions) {
       const order = this.orderService.process(decision);
       this.logger.info("Worker recorded local decision", {

@@ -5,10 +5,11 @@ import type { Logger } from "./logging.js";
 import type { Decision, WishlistItem } from "./models.js";
 import { DecisionRepository } from "./storage/sqlite.js";
 import type { LocationRepository } from "./storage/location.js";
+import { buildSearchQuery } from "./ai/decision.js";
 
 /** Interface consumed by workers; implementations are configured with provider interfaces. */
 export interface WishlistEvaluationWorkflow {
-  evaluateWishlist(wishlistItems: readonly WishlistItem[], now?: Date): Decision[];
+  evaluateWishlist(wishlistItems: readonly WishlistItem[], now?: Date): Promise<Decision[]>;
 }
 
 /** Orchestrates local eligibility evaluation only; it never purchases anything. */
@@ -24,14 +25,15 @@ export class SafeAutomationService implements WishlistEvaluationWorkflow {
     private readonly logger: Logger,
   ) {}
 
-  public evaluateWishlistItem(wishlistItem: WishlistItem, now = new Date()): Decision {
+  public async evaluateWishlistItem(wishlistItem: WishlistItem, now = new Date()): Promise<Decision> {
     let decision: Decision;
     try {
       const deliveryLocation = this.location.get();
-      const candidates = this.catalog.searchProducts(wishlistItem.desiredProductName, deliveryLocation);
+      const searchQuery = buildSearchQuery(wishlistItem);
+      const candidates = await this.catalog.searchProducts(searchQuery, deliveryLocation);
       const selectedItem = this.selector.select(wishlistItem, candidates);
       
-      const currentAvailability = selectedItem === undefined ? undefined : this.availability.getAvailability(selectedItem.sku, deliveryLocation);
+      const currentAvailability = selectedItem === undefined ? undefined : await this.availability.getAvailability(selectedItem.sku, deliveryLocation);
       const item = selectedItem === undefined ? undefined : { ...selectedItem, available: currentAvailability?.available ?? false, availableQuantity: currentAvailability?.availableQuantity ?? 0 };
       decision = this.rules.evaluate(wishlistItem, item, this.finalizedOrders, now);
     } catch (error) {
@@ -43,8 +45,8 @@ export class SafeAutomationService implements WishlistEvaluationWorkflow {
     return decision;
   }
 
-  public evaluateWishlist(wishlistItems: readonly WishlistItem[], now = new Date()): Decision[] {
-    return wishlistItems.map((item) => this.evaluateWishlistItem(item, now));
+  public async evaluateWishlist(wishlistItems: readonly WishlistItem[], now = new Date()): Promise<Decision[]> {
+    return Promise.all(wishlistItems.map((item) => this.evaluateWishlistItem(item, now)));
   }
 }
 

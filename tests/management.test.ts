@@ -49,6 +49,33 @@ describe("wishlist CLI management", () => {
     expect(() => runWishlistCommand(["add", "milk", "Milk", "1", "-1", "0"], wishlist, ui)).toThrow("non-negative decimal");
     expect(() => runWishlistCommand(["add", "milk", "Milk", "1", "70", "-1"], wishlist, ui)).toThrow("non-negative integer");
   });
+
+  it("resets availability state safely", () => {
+    const wishlist = repository();
+    const dbPath = (wishlist as any).databasePath;
+    
+    // Test without database path
+    expect(() => runWishlistCommand(["reset-availability", "milk", "110011"], wishlist, ui)).toThrow("Database path required");
+
+    // Test with database path - no existing state
+    runWishlistCommand(["reset-availability", "milk", "110011"], wishlist, ui, dbPath);
+    expect(events.at(-1)).toContain("[WARNING] No existing availability state found");
+
+    // Seed data manually to test reset
+    const { DatabaseSync } = require("node:sqlite");
+    using database = new DatabaseSync(dbPath);
+    database.exec(`CREATE TABLE IF NOT EXISTS availability_state (
+      wishlist_id TEXT, pincode TEXT, available INTEGER NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (wishlist_id, pincode)
+    )`);
+    database.prepare("INSERT INTO availability_state (wishlist_id, pincode, available, updated_at) VALUES (?, ?, ?, ?)").run("milk", "110011", 1, new Date().toISOString());
+    
+    // Test with database path - with existing state
+    runWishlistCommand(["reset-availability", "milk", "110011"], wishlist, ui, dbPath);
+    expect(events.at(-1)).toContain("[SUCCESS] Availability state reset to unavailable");
+    
+    const row = database.prepare("SELECT available FROM availability_state WHERE wishlist_id = 'milk'").get() as any;
+    expect(row.available).toBe(0);
+  });
 });
 
 describe("environment configuration", () => {

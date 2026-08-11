@@ -73,7 +73,7 @@ describe("Realistic Hot Wheels Scenario", () => {
     expect(notification.messages).toHaveLength(0);
 
     // Engine rules test
-    const decision = service.evaluateWishlistItem(wishlistItems[0]!);
+    const decision = await service.evaluateWishlistItem(wishlistItems[0]!);
     expect(decision.reason).toBe(DecisionReason.OUT_OF_STOCK);
     expect(decision.approved).toBe(false);
   });
@@ -90,7 +90,7 @@ describe("Realistic Hot Wheels Scenario", () => {
     expect(notification.messages[0]).toContain("Location: 248007");
 
     // Engine rules test
-    const decision = service.evaluateWishlistItem(wishlistItems[0]!);
+    const decision = await service.evaluateWishlistItem(wishlistItems[0]!);
     expect(decision.reason).toBe(DecisionReason.APPROVED);
     expect(decision.approved).toBe(true);
     expect(decision.orderValuePaise).toBe(17900);
@@ -107,7 +107,7 @@ describe("Realistic Hot Wheels Scenario", () => {
     await monitor.runOnce();
     expect(notification.messages).toHaveLength(0); // ₹250 > ₹200 (max price)
 
-    const decision = service.evaluateWishlistItem(wishlistItems[0]!);
+    const decision = await service.evaluateWishlistItem(wishlistItems[0]!);
     expect(decision.reason).toBe(DecisionReason.PRICE_TOO_HIGH);
     expect(decision.approved).toBe(false);
   });
@@ -120,7 +120,7 @@ describe("Realistic Hot Wheels Scenario", () => {
     await monitor.runOnce();
     expect(notification.messages).toHaveLength(0);
 
-    const decision = service.evaluateWishlistItem(wishlistItems[0]!);
+    const decision = await service.evaluateWishlistItem(wishlistItems[0]!);
     expect(decision.reason).toBe(DecisionReason.OUT_OF_STOCK);
     expect(decision.approved).toBe(false);
   });

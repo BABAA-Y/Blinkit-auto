@@ -4,6 +4,7 @@ config();
 import { LocalProductMatcher } from "./ai/decision.js";
 import { SafeAutomationService } from "./app.js";
 import { cliUsage, runCatalogCommand, runLocationCommand, runWishlistCommand } from "./cli.js";
+import { startInteractiveMenu } from "./ui/interactive.js";
 import { PurchaseRules } from "./automation/rules.js";
 import { settingsFromEnvironment } from "./config.js";
 import { MockBlinkitCatalog } from "./integrations/blinkit.js";
@@ -21,6 +22,7 @@ import { WishlistWorker } from "./worker.js";
 import { WishlistMonitor } from "./monitor.js";
 import { MockNotificationProvider } from "./notifications/mock.js";
 import { TelegramNotificationProvider } from "./notifications/telegram.js";
+import { AuthorizedDataAggregatorProvider } from "./integrations/authorized-catalog.js";
 
 try {
   const settings = settingsFromEnvironment();
@@ -32,7 +34,11 @@ try {
   const wishlist = new WishlistRepository(settings.databasePath);
   const location = new LocationRepository(settings.databasePath);
   decisions.initialize(); orders.initialize(); wishlist.initialize(); location.initialize();
-  const catalogProvider = new MockBlinkitCatalog(settings.databasePath);
+  
+  const catalogProvider = settings.catalogProvider === "authorized" && settings.apiEndpoint && settings.apiKey
+    ? new AuthorizedDataAggregatorProvider(settings.apiEndpoint, settings.apiKey, settings.apiTimeoutMs)
+    : new MockBlinkitCatalog(settings.databasePath);
+
   const service = new SafeAutomationService(catalogProvider, catalogProvider, new LocalProductMatcher(), new PurchaseRules(settings.eligibilityLimits), decisions, orders, location, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   const worker = new WishlistWorker(wishlist, service, orderService, logger);
@@ -43,14 +49,21 @@ try {
   monitor.initialize();
   const compositeWorker = {
     runOnce: async () => {
-      const results = worker.runOnce();
+      const results = await worker.runOnce();
       await monitor.runOnce();
       return results;
     }
   };
-  const [command = "run-once", ...args] = process.argv.slice(2);
+  const cliArgs = process.argv.slice(2);
+  const command = cliArgs.length === 0 ? "interactive" : cliArgs[0];
+  const args = cliArgs.length === 0 ? [] : cliArgs.slice(1);
 
   switch (command) {
+    case "interactive": {
+      if (args.length !== 0) throw new Error(cliUsage());
+      await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+      break;
+    }
     case "run-once": {
       if (args.length !== 0) throw new Error(cliUsage());
       const results = await compositeWorker.runOnce(); 
@@ -77,7 +90,7 @@ try {
       });
       break;
     case "wishlist":
-      runWishlistCommand(args, wishlist, ui); break;
+      runWishlistCommand(args, wishlist, ui, settings.databasePath); break;
     case "catalog":
       runCatalogCommand(args, catalogProvider, ui); break;
     case "location":

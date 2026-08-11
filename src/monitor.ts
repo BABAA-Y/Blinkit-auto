@@ -1,4 +1,4 @@
-import type { ItemSelector } from "./ai/decision.js";
+import { buildSearchQuery, type ItemSelector } from "./ai/decision.js";
 import type { AvailabilityProvider, NotificationProvider, ProductSearchProvider, WishlistProvider } from "./integrations/providers.js";
 import type { Logger } from "./logging.js";
 import { DatabaseSync } from "node:sqlite";
@@ -44,11 +44,12 @@ export class WishlistMonitor {
       for (const item of items) {
         if (!item.enabled) continue;
         try {
-          const candidates = this.catalog.searchProducts(item.desiredProductName, deliveryLocation);
+          const searchQuery = buildSearchQuery(item);
+          const candidates = await this.catalog.searchProducts(searchQuery, deliveryLocation);
           const selectedItem = this.selector.select(item, candidates);
           if (!selectedItem) continue;
           
-          const current = this.availability.getAvailability(selectedItem.sku, deliveryLocation);
+          const current = await this.availability.getAvailability(selectedItem.sku, deliveryLocation);
           if (!current) continue;
 
           const isAvailable = current.available && current.availableQuantity >= item.quantity && selectedItem.pricePaise <= item.maximumUnitPricePaise;

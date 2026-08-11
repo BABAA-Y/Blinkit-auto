@@ -41,16 +41,16 @@ function worker(): { worker: WishlistWorker; decisions: DecisionRepository; orde
 }
 
 describe("WishlistWorker", () => {
-  it("runs the complete local workflow and records a decision", () => {
+  it("runs the complete local workflow and records a decision", async () => {
     const setup = worker(); setup.wishlist.save(wishlist());
-    const result = setup.worker.runOnce(new Date("2026-08-11T12:00:00Z"));
+    const result = await setup.worker.runOnce(new Date("2026-08-11T12:00:00Z"));
     expect(result).toHaveLength(1); expect(result[0]?.reason).toBe(DecisionReason.APPROVED); expect(setup.decisions.count()).toBe(1); expect(setup.orders.list()).toHaveLength(1);
   });
 
-  it("evaluates multiple wishlist items including rejected items", () => {
+  it("evaluates multiple wishlist items including rejected items", async () => {
     const setup = worker(); setup.wishlist.save(wishlist());
     setup.wishlist.save(wishlist({ id: "disabled", desiredProductName: "Bananas", enabled: false }));
-    const result = setup.worker.runOnce(new Date("2026-08-11T12:00:00Z"));
+    const result = await setup.worker.runOnce(new Date("2026-08-11T12:00:00Z"));
     expect(result.map((decision) => decision.reason)).toEqual([DecisionReason.DISABLED, DecisionReason.APPROVED]); expect(setup.decisions.count()).toBe(2); expect(setup.orders.list()).toHaveLength(2);
   });
 });

@@ -1,0 +1,153 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import prompts from "prompts";
+import { startInteractiveMenu } from "../src/ui/interactive.js";
+import { WishlistRepository } from "../src/storage/wishlist.js";
+import { LocationRepository } from "../src/storage/location.js";
+import type { TerminalUI } from "../src/ui/output.js";
+import type { Settings } from "../src/config.js";
+import type { Logger } from "../src/logging.js";
+import { cliUsage } from "../src/cli.js";
+import { execSync } from "node:child_process";
+
+const directories: string[] = [];
+afterEach(() => {
+  directories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true }));
+  vi.clearAllMocks();
+});
+
+function setup() {
+  const directory = mkdtempSync(join(tmpdir(), "blinkit-auto-"));
+  directories.push(directory);
+  const databasePath = join(directory, "test.sqlite3");
+  
+  const wishlist = new WishlistRepository(databasePath);
+  wishlist.initialize();
+  const location = new LocationRepository(databasePath);
+  location.initialize();
+  
+  const compositeWorker = { runOnce: vi.fn().mockResolvedValue([{ approved: true }, { approved: false }]) };
+  
+  const settings: Settings = {
+    databasePath,
+    logLevel: "INFO",
+    schedulerIntervalMs: 300000,
+    eligibilityLimits: { maximumOrderValuePaise: 20000, dailySpendingLimitPaise: 50000, monthlySpendingLimitPaise: 100000, duplicateOrderWindowMinutes: 60 },
+    notificationProvider: "mock",
+    catalogProvider: "mock",
+    apiTimeoutMs: 5000
+  };
+  
+  const ui = {
+    header: vi.fn(), success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), message: vi.fn(),
+    printTable: vi.fn(), printObject: vi.fn()
+  } as unknown as TerminalUI;
+  
+  const logger: Logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  
+  return { wishlist, location, compositeWorker, settings, ui, logger };
+}
+
+describe("Interactive Menu", () => {
+  beforeEach(() => {
+    // Suppress console.log output during tests to keep console clean
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "clear").mockImplementation(() => {});
+  });
+
+  it("can exit immediately", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    prompts.inject(["exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    expect(ui.success).toHaveBeenCalledWith("Goodbye!");
+  });
+
+  it("can add a wishlist item and generate an automatic ID", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    prompts.inject([
+      "add",
+      "Milk",
+      "Amul",
+      50, // maxPrice
+      2, // quantity
+      "dairy", // keywords
+      30, // cooldown
+      "", // enter to continue
+      "exit"
+    ]);
+
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    const items = wishlist.list();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBeDefined();
+    expect(items[0]!.desiredProductName).toBe("Milk");
+    expect(items[0]!.brand).toBe("Amul");
+    expect(items[0]!.maximumUnitPricePaise).toBe(5000);
+    expect(items[0]!.quantity).toBe(2);
+    expect(items[0]!.keywords).toEqual(["dairy"]);
+    expect(items[0]!.cooldownMinutes).toBe(30);
+  });
+
+  it("can view wishlist", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    wishlist.save({ id: "milk123", desiredProductName: "Milk", maximumUnitPricePaise: 5000, quantity: 2, cooldownMinutes: 30, enabled: true });
+    
+    prompts.inject(["view", "", "exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    expect(ui.printTable).toHaveBeenCalled();
+  });
+
+  it("can remove a wishlist item", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    wishlist.save({ id: "milk123", desiredProductName: "Milk", maximumUnitPricePaise: 5000, quantity: 2, cooldownMinutes: 30, enabled: true });
+    
+    prompts.inject(["remove", "milk123", true, "", "exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    expect(wishlist.list()).toHaveLength(0);
+    expect(ui.success).toHaveBeenCalledWith("Product removed from wishlist.");
+  });
+
+  it("can check now and run worker", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    prompts.inject(["check", "", "exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    expect(compositeWorker.runOnce).toHaveBeenCalled();
+  });
+
+  it("can start and stop monitoring scheduler", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    prompts.inject(["monitor", "", "monitor", "", "exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    // The second monitor command stops the scheduler
+    expect(ui.success).toHaveBeenCalledWith("Monitoring stopped.");
+  });
+
+  it("can update delivery location", async () => {
+    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    
+    prompts.inject(["location", true, "110001", "Delhi", "Delhi", "", "exit"]);
+    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    
+    const loc = location.get();
+    expect(loc?.pincode).toBe("110001");
+    expect(loc?.city).toBe("Delhi");
+    expect(loc?.state).toBe("Delhi");
+    expect(ui.success).toHaveBeenCalledWith("Location updated successfully.");
+  });
+  
+  it("shows interactive in CLI usage as the first option", () => {
+    expect(cliUsage()).toContain("[interactive|");
+  });
+});
