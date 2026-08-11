@@ -4,12 +4,21 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runWishlistCommand } from "../src/cli.js";
 import { settingsFromEnvironment } from "../src/config.js";
-import type { Logger } from "../src/logging.js";
+import type { TerminalUI } from "../src/ui/output.js";
 import { WishlistRepository } from "../src/storage/wishlist.js";
 
 const directories: string[] = [];
-const events: Array<Record<string, unknown>> = [];
-const logger: Logger = { info: (message, fields = {}) => { events.push({ message, ...fields }); }, warn: () => undefined, error: () => undefined };
+const events: string[] = [];
+const ui: any = {
+  header: (msg: string) => events.push(`[HEADER] ${msg}`),
+  success: (msg: string) => events.push(`[SUCCESS] ${msg}`),
+  error: (msg: string) => events.push(`[ERROR] ${msg}`),
+  info: (msg: string) => events.push(`[INFO] ${msg}`),
+  warning: (msg: string) => events.push(`[WARNING] ${msg}`),
+  message: (msg: string) => events.push(`[MESSAGE] ${msg}`),
+  printTable: (h: string[], r: any[]) => events.push(`[TABLE] Rows: ${r.length}`),
+  printObject: (obj: any) => events.push(`[OBJECT] ${JSON.stringify(obj)}`),
+};
 afterEach(() => { events.splice(0); directories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true })); });
 
 function repository(): WishlistRepository {
@@ -20,25 +29,25 @@ function repository(): WishlistRepository {
 describe("wishlist CLI management", () => {
   it("adds, lists, and removes a wishlist item", () => {
     const wishlist = repository();
-    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk (1 L)", "2", "70.00", "15"], wishlist, logger);
+    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk (1 L)", "2", "70.00", "15"], wishlist, ui);
     expect(wishlist.list()).toMatchObject([{ id: "milk", quantity: 2, maximumUnitPricePaise: 7000, cooldownMinutes: 15, enabled: true }]);
-    runWishlistCommand(["list"], wishlist, logger); expect(events.at(-1)?.items).toHaveLength(1);
-    runWishlistCommand(["remove", "milk"], wishlist, logger); expect(wishlist.list()).toEqual([]);
+    runWishlistCommand(["list"], wishlist, ui); expect(events.at(-1)).toBe("[TABLE] Rows: 1");
+    runWishlistCommand(["remove", "milk"], wishlist, ui); expect(wishlist.list()).toEqual([]);
   });
 
   it("enables and disables wishlist items", () => {
     const wishlist = repository();
-    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk", "1", "70", "0", "disabled"], wishlist, logger);
+    runWishlistCommand(["add", "milk", "mock-milk-1", "Milk", "1", "70", "0", "disabled"], wishlist, ui);
     expect(wishlist.list()[0]?.enabled).toBe(false);
-    runWishlistCommand(["enable", "milk"], wishlist, logger); expect(wishlist.list()[0]?.enabled).toBe(true);
-    runWishlistCommand(["disable", "milk"], wishlist, logger); expect(wishlist.list()[0]?.enabled).toBe(false);
+    runWishlistCommand(["enable", "milk"], wishlist, ui); expect(wishlist.list()[0]?.enabled).toBe(true);
+    runWishlistCommand(["disable", "milk"], wishlist, ui); expect(wishlist.list()[0]?.enabled).toBe(false);
   });
 
   it("rejects invalid wishlist values", () => {
     const wishlist = repository();
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "0", "70", "0"], wishlist, logger)).toThrow("positive integer");
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "-1", "0"], wishlist, logger)).toThrow("non-negative decimal");
-    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "70", "-1"], wishlist, logger)).toThrow("non-negative integer");
+    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "0", "70", "0"], wishlist, ui)).toThrow("positive integer");
+    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "-1", "0"], wishlist, ui)).toThrow("non-negative decimal");
+    expect(() => runWishlistCommand(["add", "milk", "sku", "Milk", "1", "70", "-1"], wishlist, ui)).toThrow("non-negative integer");
   });
 });
 

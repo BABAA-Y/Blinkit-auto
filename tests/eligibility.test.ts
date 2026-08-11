@@ -10,6 +10,7 @@ import type { Logger } from "../src/logging.js";
 import { DecisionReason, type CatalogItem, type EligibilityLimits, type WishlistItem } from "../src/models.js";
 import { DecisionRepository } from "../src/storage/sqlite.js";
 import { OrderRepository } from "../src/storage/orders.js";
+import { LocationRepository } from "../src/storage/location.js";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 const directories: string[] = [];
@@ -49,7 +50,9 @@ function service(items: readonly CatalogItem[], limits: EligibilityLimits = defa
     latestFinalizedForWishlist: (id: string) => repository.latestApprovedForWishlist(id),
     latestFinalizedForProduct: (id: string) => repository.latestApprovedForProduct(id),
   };
-  return new SafeAutomationService(catalog, availability, new SimpleItemSelector(), new PurchaseRules(limits), repository, mockHistory, silentLogger);
+  const location = new LocationRepository(join(directory, "test.sqlite3"));
+  location.initialize();
+  return new SafeAutomationService(catalog, availability, new SimpleItemSelector(), new PurchaseRules(limits), repository, mockHistory, location, silentLogger);
 }
 
 describe("local purchase eligibility engine", () => {

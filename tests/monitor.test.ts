@@ -9,6 +9,7 @@ import type { AvailabilityProvider, ProductCatalogProvider, WishlistProvider } f
 import type { Logger } from "../src/logging.js";
 import type { CatalogItem, WishlistItem } from "../src/models.js";
 import { DatabaseSync } from "node:sqlite";
+import { LocationRepository } from "../src/storage/location.js";
 
 const directories: string[] = [];
 const logger: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -27,12 +28,14 @@ function monitorSetup(items: CatalogItem[], wishlistItems: WishlistItem[]) {
       return found === undefined ? undefined : { productIdentifier, available: found.available, availableQuantity: found.availableQuantity };
     }
   };
-  const notification = new MockNotificationProvider(logger);
-  
-  const monitor = new WishlistMonitor(wishlist, catalog, availability, new SimpleItemSelector(), notification, databasePath, logger);
+  const notification = new MockNotificationProvider();
+  const location = new LocationRepository(databasePath);
+  location.initialize();
+
+  const monitor = new WishlistMonitor(wishlist, catalog, availability, new SimpleItemSelector(), notification, location, databasePath, logger);
   monitor.initialize();
 
-  return { monitor, notification, databasePath };
+  return { monitor, notification, databasePath, location };
 }
 
 function wItem(id: string, productIdentifier: string, enabled = true): WishlistItem {
@@ -131,13 +134,16 @@ describe("WishlistMonitor", () => {
 
   it("mock notification provider logs with correct visual format", () => {
     const logs: string[] = [];
-    const mockLogger: Logger = { info: (msg) => logs.push(msg), warn: () => undefined, error: () => undefined };
-    const notification = new MockNotificationProvider(mockLogger);
+    const mockUI: any = {
+      header: (msg: string) => logs.push(`[HEADER] ${msg}`),
+      message: (msg: string) => logs.push(`[MESSAGE] ${msg}`)
+    };
+    const notification = new MockNotificationProvider(mockUI);
     notification.notify("Test Message Details");
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain("[MOCK NOTIFICATION]");
-    expect(logs[0]).toContain("🚨 Blinkit Wishlist Update");
-    expect(logs[0]).toContain("Test Message Details");
+    expect(logs).toHaveLength(2);
+    expect(logs[0]).toContain("[HEADER] Mock Notification");
+    expect(logs[1]).toContain("🚨 Blinkit Wishlist Update");
+    expect(logs[1]).toContain("Test Message Details");
     expect(notification.messages).toContain("Test Message Details");
   });
 });

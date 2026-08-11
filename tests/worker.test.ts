@@ -16,6 +16,7 @@ import { WishlistScheduler } from "../src/scheduler.js";
 import { DecisionRepository } from "../src/storage/sqlite.js";
 import { OrderRepository } from "../src/storage/orders.js";
 import { WishlistRepository } from "../src/storage/wishlist.js";
+import { LocationRepository } from "../src/storage/location.js";
 import { WishlistWorker } from "../src/worker.js";
 
 const directories: string[] = [];
@@ -31,9 +32,10 @@ function worker(): { worker: WishlistWorker; decisions: DecisionRepository; orde
   const directory = mkdtempSync(join(tmpdir(), "blinkit-auto-")); directories.push(directory);
   const databasePath = join(directory, "test.sqlite3");
   const decisions = new DecisionRepository(databasePath); const orders = new OrderRepository(databasePath); const wishlistRepository = new WishlistRepository(databasePath);
-  decisions.initialize(); orders.initialize(); wishlistRepository.initialize();
+  const location = new LocationRepository(databasePath);
+  decisions.initialize(); orders.initialize(); wishlistRepository.initialize(); location.initialize();
   const catalogProvider = new MockBlinkitCatalog();
-  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(limits), decisions, orders, logger);
+  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(limits), decisions, orders, location, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   return { worker: new WishlistWorker(wishlistRepository, service, orderService, logger), decisions, orders, wishlist: wishlistRepository };
 }

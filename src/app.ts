@@ -4,6 +4,7 @@ import type { AvailabilityProvider, ProductCatalogProvider } from "./integration
 import type { Logger } from "./logging.js";
 import type { Decision, WishlistItem } from "./models.js";
 import { DecisionRepository } from "./storage/sqlite.js";
+import type { LocationRepository } from "./storage/location.js";
 
 /** Interface consumed by workers; implementations are configured with provider interfaces. */
 export interface WishlistEvaluationWorkflow {
@@ -19,6 +20,7 @@ export class SafeAutomationService implements WishlistEvaluationWorkflow {
     private readonly rules: PurchaseRules,
     private readonly decisions: DecisionRepository,
     private readonly finalizedOrders: FinalizedOrderHistory,
+    private readonly location: LocationRepository,
     private readonly logger: Logger,
   ) {}
 
@@ -27,7 +29,8 @@ export class SafeAutomationService implements WishlistEvaluationWorkflow {
     try {
       const candidates = this.catalog.lookupProducts(wishlistItem.productIdentifier);
       const selectedItem = this.selector.select(wishlistItem.productIdentifier, wishlistItem.productName, candidates);
-      const currentAvailability = selectedItem === undefined ? undefined : this.availability.getAvailability(selectedItem.sku);
+      const deliveryLocation = this.location.get();
+      const currentAvailability = selectedItem === undefined ? undefined : this.availability.getAvailability(selectedItem.sku, deliveryLocation);
       const item = selectedItem === undefined ? undefined : { ...selectedItem, available: currentAvailability?.available ?? false, availableQuantity: currentAvailability?.availableQuantity ?? 0 };
       decision = this.rules.evaluate(wishlistItem, item, this.finalizedOrders, now);
     } catch (error) {

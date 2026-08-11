@@ -75,3 +75,11 @@ export interface OrderRecord {
   submissionReference?: string;
   idempotencyKey: string;
 }
+
+export interface DeliveryLocation {
+  pincode: string;
+  city?: string;
+  state?: string;
+  latitude?: number;
+  longitude?: number;
+}

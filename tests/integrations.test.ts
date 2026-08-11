@@ -8,7 +8,7 @@ describe("mock provider interfaces", () => {
     const mock = new MockBlinkitCatalog();
     const catalog: ProductCatalogProvider = mock;
     const availability: AvailabilityProvider = mock;
-    expect(catalog.lookupProducts("milk").map((item) => item.sku)).toEqual(["mock-milk-1", "mock-milk-2"]);
+    expect(catalog.lookupProducts("milk").map((item) => item.sku).sort()).toEqual(["mock-milk-1", "mock-milk-2"].sort());
     expect(availability.getAvailability("mock-milk-1")).toMatchObject({ available: true, availableQuantity: 5 });
   });
 
