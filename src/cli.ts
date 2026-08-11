@@ -2,6 +2,7 @@ import { parseNonNegativeMoneyToPaise } from "./config.js";
 import type { Logger } from "./logging.js";
 import type { WishlistItem } from "./models.js";
 import type { WishlistRepository } from "./storage/wishlist.js";
+import type { MockBlinkitCatalog } from "./integrations/blinkit.js";
 
 export function runWishlistCommand(args: readonly string[], repository: WishlistRepository, logger: Logger): void {
   const [operation, ...values] = args;
@@ -37,7 +38,28 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
 }
 
 export function cliUsage(): string {
-  return "Usage: npm start -- [run-once|run|status|wishlist list|wishlist add <id> <product-id> <product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>]";
+  return "Usage: npm start -- [run-once|run|status|wishlist list|wishlist add <id> <product-id> <product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|catalog list|catalog set-availability <sku> <true|false> <quantity>]";
+}
+
+export function runCatalogCommand(args: readonly string[], catalog: MockBlinkitCatalog, logger: Logger): void {
+  const [operation, ...values] = args;
+  switch (operation) {
+    case "list":
+      logger.info("Mock Catalog", { items: catalog.lookupProducts("") });
+      return;
+    case "set-availability": {
+      requireArgumentCount(values, 3, "catalog set-availability <sku> <true|false> <quantity>");
+      const [sku, availableStr, quantityStr] = values;
+      const available = availableStr === "true";
+      const quantity = nonNegativeInteger(quantityStr!, "quantity");
+      const changed = catalog.setAvailability(sku!, available, quantity);
+      if (!changed) throw new Error(`Catalog item not found: ${sku}`);
+      logger.info("Catalog availability updated", { sku, available, quantity });
+      return;
+    }
+    default:
+      throw new Error(cliUsage());
+  }
 }
 
 function wishlistUsage(): string { return cliUsage(); }

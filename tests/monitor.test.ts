@@ -27,7 +27,7 @@ function monitorSetup(items: CatalogItem[], wishlistItems: WishlistItem[]) {
       return found === undefined ? undefined : { productIdentifier, available: found.available, availableQuantity: found.availableQuantity };
     }
   };
-  const notification = new MockNotificationProvider();
+  const notification = new MockNotificationProvider(logger);
   
   const monitor = new WishlistMonitor(wishlist, catalog, availability, new SimpleItemSelector(), notification, databasePath, logger);
   monitor.initialize();
@@ -127,5 +127,17 @@ describe("WishlistMonitor", () => {
     const columns = database.prepare("PRAGMA table_info(availability_state)").all() as Array<{ name: string }>;
     expect(columns.map(c => c.name)).not.toContain("botToken");
     expect(columns.map(c => c.name)).not.toContain("chatId");
+  });
+
+  it("mock notification provider logs with correct visual format", () => {
+    const logs: string[] = [];
+    const mockLogger: Logger = { info: (msg) => logs.push(msg), warn: () => undefined, error: () => undefined };
+    const notification = new MockNotificationProvider(mockLogger);
+    notification.notify("Test Message Details");
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain("[MOCK NOTIFICATION]");
+    expect(logs[0]).toContain("🚨 Blinkit Wishlist Update");
+    expect(logs[0]).toContain("Test Message Details");
+    expect(notification.messages).toContain("Test Message Details");
   });
 });
