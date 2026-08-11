@@ -19,7 +19,7 @@ import { WishlistRepository } from "../src/storage/wishlist.js";
 import { WishlistWorker } from "../src/worker.js";
 
 const directories: string[] = [];
-const logger: Logger = { info: () => undefined };
+const logger: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const limits = { maximumOrderValuePaise: 20_000, dailySpendingLimitPaise: 50_000, monthlySpendingLimitPaise: 100_000, duplicateOrderWindowMinutes: 0 };
 afterEach(() => { vi.useRealTimers(); directories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true })); });
 
@@ -33,7 +33,7 @@ function worker(): { worker: WishlistWorker; decisions: DecisionRepository; orde
   const decisions = new DecisionRepository(databasePath); const orders = new OrderRepository(databasePath); const wishlistRepository = new WishlistRepository(databasePath);
   decisions.initialize(); orders.initialize(); wishlistRepository.initialize();
   const catalogProvider = new MockBlinkitCatalog();
-  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(limits), decisions, logger);
+  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(limits), decisions, orders, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   return { worker: new WishlistWorker(wishlistRepository, service, orderService, logger), decisions, orders, wishlist: wishlistRepository };
 }

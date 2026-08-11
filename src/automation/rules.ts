@@ -23,6 +23,7 @@ export class PurchaseRules {
     const reject = (reason: DecisionReason, selectedItem?: CatalogItem, orderValuePaise?: number): Decision => this.issue({
       ...base, approved: false, reason, item: selectedItem, unitPricePaise: selectedItem?.pricePaise, orderValuePaise,
     });
+    if (!wishlistItem.enabled) return reject(DecisionReason.DISABLED);
     if (!isValidWishlistItem(wishlistItem)) return reject(DecisionReason.INVALID_PROVIDER_DATA);
     if (item === undefined) return reject(DecisionReason.PRODUCT_NOT_FOUND);
     if (!isValidCatalogItem(item)) return reject(DecisionReason.INVALID_PROVIDER_DATA);
@@ -45,6 +46,8 @@ export class PurchaseRules {
 
   private issue(decision: Decision): Decision { trustedEligibilityDecisions.add(decision); return decision; }
 }
+
+export function issueTestDecision(decision: Decision): Decision { trustedEligibilityDecisions.add(decision); return decision; }
 
 function isValidWishlistItem(item: WishlistItem): boolean {
   return Number.isSafeInteger(item.quantity) && item.quantity > 0 && Number.isSafeInteger(item.maximumUnitPricePaise) && item.maximumUnitPricePaise >= 0 && Number.isSafeInteger(item.cooldownMinutes) && item.cooldownMinutes >= 0;

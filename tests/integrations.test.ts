@@ -15,7 +15,7 @@ describe("mock provider interfaces", () => {
   it("uses mock order submission only through the submission interface", () => {
     const mock = new MockOrderSubmissionProvider();
     const submission: OrderSubmissionProvider = mock;
-    expect(submission.submit({ productIdentifier: "mock-milk-1", productName: "Milk", quantity: 1, unitPricePaise: 6800, totalPaise: 6800, paymentReference: "mock-payment-1" }))
+    expect(submission.submit({ productIdentifier: "mock-milk-1", productName: "Milk", quantity: 1, unitPricePaise: 6800, totalPaise: 6800, paymentReference: "mock-payment-1", idempotencyKey: "test-idempotency-key" }))
       .toEqual({ reference: "mock-submission-1" });
     expect(mock.submittedOrders).toHaveLength(1);
   });

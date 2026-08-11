@@ -2,10 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DecisionReason, type Decision } from "../models.js";
-import type { DecisionHistory } from "../automation/rules.js";
-
 /** SQLite audit storage for non-sensitive local eligibility decisions. */
-export class DecisionRepository implements DecisionHistory {
+export class DecisionRepository {
   public constructor(private readonly databasePath: string) {}
 
   public initialize(): void {

@@ -9,7 +9,7 @@ import { WishlistRepository } from "../src/storage/wishlist.js";
 
 const directories: string[] = [];
 const events: Array<Record<string, unknown>> = [];
-const logger: Logger = { info: (message, fields = {}) => { events.push({ message, ...fields }); } };
+const logger: Logger = { info: (message, fields = {}) => { events.push({ message, ...fields }); }, warn: () => undefined, error: () => undefined };
 afterEach(() => { events.splice(0); directories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true })); });
 
 function repository(): WishlistRepository {

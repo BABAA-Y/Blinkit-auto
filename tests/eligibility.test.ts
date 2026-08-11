@@ -9,10 +9,11 @@ import type { AvailabilityProvider, ProductCatalogProvider } from "../src/integr
 import type { Logger } from "../src/logging.js";
 import { DecisionReason, type CatalogItem, type EligibilityLimits, type WishlistItem } from "../src/models.js";
 import { DecisionRepository } from "../src/storage/sqlite.js";
+import { OrderRepository } from "../src/storage/orders.js";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 const directories: string[] = [];
-const silentLogger: Logger = { info: () => undefined };
+const silentLogger: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const defaultLimits: EligibilityLimits = {
   maximumOrderValuePaise: 20_000, dailySpendingLimitPaise: 50_000,
   monthlySpendingLimitPaise: 100_000, duplicateOrderWindowMinutes: 60,
@@ -35,13 +36,20 @@ function service(items: readonly CatalogItem[], limits: EligibilityLimits = defa
   const directory = mkdtempSync(join(tmpdir(), "blinkit-auto-"));
   directories.push(directory);
   const repository = new DecisionRepository(join(directory, "test.sqlite3"));
+  const orderRepo = new OrderRepository(join(directory, "test.sqlite3"));
   repository.initialize();
+  orderRepo.initialize();
   const catalog: ProductCatalogProvider = { lookupProducts: () => items };
   const availability: AvailabilityProvider = { getAvailability: (productIdentifier) => {
     const found = items.find((candidate) => candidate.sku === productIdentifier);
     return found === undefined ? undefined : { productIdentifier, available: found.available, availableQuantity: found.availableQuantity };
   } };
-  return new SafeAutomationService(catalog, availability, new SimpleItemSelector(), new PurchaseRules(limits), repository, silentLogger);
+  const mockHistory = {
+    finalizedSpendingBetween: (start: Date, end: Date) => repository.approvedSpendingBetween(start, end),
+    latestFinalizedForWishlist: (id: string) => repository.latestApprovedForWishlist(id),
+    latestFinalizedForProduct: (id: string) => repository.latestApprovedForProduct(id),
+  };
+  return new SafeAutomationService(catalog, availability, new SimpleItemSelector(), new PurchaseRules(limits), repository, mockHistory, silentLogger);
 }
 
 describe("local purchase eligibility engine", () => {

@@ -22,7 +22,7 @@ try {
   const wishlist = new WishlistRepository(settings.databasePath);
   decisions.initialize(); orders.initialize(); wishlist.initialize();
   const catalogProvider = new MockBlinkitCatalog();
-  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(settings.eligibilityLimits), decisions, logger);
+  const service = new SafeAutomationService(catalogProvider, catalogProvider, new SimpleItemSelector(), new PurchaseRules(settings.eligibilityLimits), decisions, orders, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   const worker = new WishlistWorker(wishlist, service, orderService, logger);
   const [command = "run-once", ...args] = process.argv.slice(2);
