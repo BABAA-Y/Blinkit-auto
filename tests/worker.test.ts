@@ -64,4 +64,31 @@ describe("WishlistScheduler and configuration", () => {
     scheduler.start(); expect(runnable.runOnce).toHaveBeenCalledTimes(1); vi.advanceTimersByTime(1_000); expect(runnable.runOnce).toHaveBeenCalledTimes(2);
     scheduler.stop(); expect(scheduler.isRunning).toBe(false); vi.advanceTimersByTime(5_000); expect(runnable.runOnce).toHaveBeenCalledTimes(2);
   });
+
+  it("handles asynchronous execution and catches errors without stopping", async () => {
+    vi.useFakeTimers();
+    let runs = 0;
+    const runnable = {
+      runOnce: async () => {
+        runs++;
+        if (runs === 2) throw new Error("Async failure test");
+      }
+    };
+    const errors: unknown[] = [];
+    const testLogger: Logger = { info: () => undefined, warn: () => undefined, error: (_, ctx) => errors.push(ctx) };
+    const scheduler = new WishlistScheduler(runnable, 1_000, testLogger);
+    
+    scheduler.start();
+    expect(runs).toBe(1);
+    
+    // Using fake timers with async operations
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(runs).toBe(2);
+    expect(errors).toHaveLength(1); // Caught the second run error
+    
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(runs).toBe(3); // Scheduler continued working
+    
+    scheduler.stop();
+  });
 });
