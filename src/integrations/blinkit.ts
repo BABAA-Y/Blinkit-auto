@@ -10,6 +10,7 @@ export class MockBlinkitCatalog implements CatalogAvailabilityProvider {
     { sku: "mock-banana-1", pincode: "*", name: "Bananas (6 pcs)", pricePaise: 4500, available: true, availableQuantity: 10 },
     { sku: "mock-milk-1", pincode: "*", name: "Milk (1 L)", pricePaise: 6800, available: true, availableQuantity: 5 },
     { sku: "mock-milk-2", pincode: "*", name: "Organic Milk (1 L)", pricePaise: 16000, available: false, availableQuantity: 0 },
+    { sku: "mock-hotwheels-chevy", pincode: "*", name: "Hot Wheels '63 Chevy II Die Cast Car", pricePaise: 17900, available: true, availableQuantity: 5 },
   ];
   private items: (CatalogItem & { pincode: string })[] = [...this.defaultItems];
 
@@ -30,11 +31,8 @@ export class MockBlinkitCatalog implements CatalogAvailabilityProvider {
         available_quantity INTEGER NOT NULL,
         PRIMARY KEY (sku, pincode)
       )`);
-      const count = (database.prepare("SELECT COUNT(*) AS count FROM mock_catalog").get() as { count: number }).count;
-      if (count === 0) {
-        const stmt = database.prepare(`INSERT INTO mock_catalog (sku, pincode, name, price_paise, available, available_quantity) VALUES (?, ?, ?, ?, ?, ?)`);
-        for (const item of this.defaultItems) stmt.run(item.sku, item.pincode, item.name, item.pricePaise, Number(item.available), item.availableQuantity);
-      }
+      const stmt = database.prepare(`INSERT OR IGNORE INTO mock_catalog (sku, pincode, name, price_paise, available, available_quantity) VALUES (?, ?, ?, ?, ?, ?)`);
+      for (const item of this.defaultItems) stmt.run(item.sku, item.pincode, item.name, item.pricePaise, Number(item.available), item.availableQuantity);
     }
   }
 

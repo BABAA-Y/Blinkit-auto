@@ -51,7 +51,7 @@ export class WishlistMonitor {
           const current = this.availability.getAvailability(selectedItem.sku, deliveryLocation);
           if (!current) continue;
 
-          const isAvailable = current.available && current.availableQuantity > 0;
+          const isAvailable = current.available && current.availableQuantity >= item.quantity && selectedItem.pricePaise <= item.maximumUnitPricePaise;
           const wasAvailable = this.getPreviousState(item.id, currentPincode);
 
           if (isAvailable && !wasAvailable) {
