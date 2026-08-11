@@ -1,3 +1,6 @@
+import { config } from "dotenv";
+config();
+
 import { LocalProductMatcher } from "./ai/decision.js";
 import { SafeAutomationService } from "./app.js";
 import { cliUsage, runCatalogCommand, runLocationCommand, runWishlistCommand } from "./cli.js";
