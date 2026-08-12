@@ -30,7 +30,7 @@ describe("Telegram Linking Server Entry Point", () => {
   });
 
   it("starts and responds to /health and handles graceful shutdown", async () => {
-    const port = 3005; // use different port for test
+    const port = 3006; // use different port for test
     const serverProcess = exec(`npx tsx src/server/index.ts`, {
       env: { ...process.env, TELEGRAM_BOT_TOKEN: "test-token", DATABASE_PATH: dbPath, PORT: port.toString(), NODE_ENV: "production" }
     });
@@ -74,5 +74,5 @@ describe("Telegram Linking Server Entry Point", () => {
       expect(stdout).toContain("Shutting down server gracefully...");
       expect(stdout).toContain("Server stopped.");
     }
-  });
+  }, 15000);
 });

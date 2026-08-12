@@ -36,7 +36,7 @@ export function settingsFromEnvironment(environment: NodeJS.ProcessEnv = process
     notificationProvider: (environment.BLINKIT_AUTO_NOTIFICATION_PROVIDER as "mock" | "telegram") ?? "mock",
     telegramBotToken: environment.BLINKIT_AUTO_TELEGRAM_BOT_TOKEN,
     telegramChatId: environment.BLINKIT_AUTO_TELEGRAM_CHAT_ID,
-    serverUrl: environment.BLINKIT_AUTO_SERVER_URL,
+    serverUrl: environment.BLINKIT_AUTO_SERVER_URL ?? (environment.BLINKIT_AUTO_TELEGRAM_BOT_TOKEN ? undefined : "https://blinkit-autoreminder-server.onrender.com"),
     catalogProvider: (environment.BLINKIT_AUTO_CATALOG_PROVIDER as "mock" | "authorized") ?? "mock",
     apiEndpoint: environment.BLINKIT_AUTO_API_ENDPOINT,
     apiKey: environment.BLINKIT_AUTO_API_KEY,
