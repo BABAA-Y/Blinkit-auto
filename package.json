@@ -1,11 +1,18 @@
 {
   "name": "blinkit-auto",
   "version": "0.1.0",
-  "private": true,
   "description": "Safe local-first automation architecture for Blinkit-Auto",
   "type": "module",
+  "bin": {
+    "blinkit-auto": "bin/blinkit-auto.js"
+  },
+  "files": [
+    "dist/src",
+    "bin",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc",
     "start": "tsx src/index.ts",
     "test": "vitest run --pool=threads --maxWorkers=1"
   },

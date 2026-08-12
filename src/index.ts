@@ -18,6 +18,7 @@ import { DecisionRepository } from "./storage/sqlite.js";
 import { OrderRepository } from "./storage/orders.js";
 import { WishlistRepository } from "./storage/wishlist.js";
 import { LocationRepository } from "./storage/location.js";
+import { SettingsRepository } from "./storage/settings.js";
 import { WishlistWorker } from "./worker.js";
 import { WishlistMonitor } from "./monitor.js";
 import { MockNotificationProvider } from "./notifications/mock.js";
@@ -33,7 +34,8 @@ try {
   const orders = new OrderRepository(settings.databasePath);
   const wishlist = new WishlistRepository(settings.databasePath);
   const location = new LocationRepository(settings.databasePath);
-  decisions.initialize(); orders.initialize(); wishlist.initialize(); location.initialize();
+  const appSettings = new SettingsRepository(settings.databasePath);
+  decisions.initialize(); orders.initialize(); wishlist.initialize(); location.initialize(); appSettings.initialize();
   
   const catalogProvider = settings.catalogProvider === "authorized" && settings.apiEndpoint && settings.apiKey
     ? new AuthorizedDataAggregatorProvider(settings.apiEndpoint, settings.apiKey, settings.apiTimeoutMs)
@@ -42,9 +44,19 @@ try {
   const service = new SafeAutomationService(catalogProvider, catalogProvider, new LocalProductMatcher(), new PurchaseRules(settings.eligibilityLimits), decisions, orders, location, logger);
   const orderService = new OrderService(orders, new MockPaymentProvider(), new MockOrderSubmissionProvider(), logger);
   const worker = new WishlistWorker(wishlist, service, orderService, logger);
-  const notificationProvider = settings.notificationProvider === "telegram" && settings.telegramBotToken && settings.telegramChatId
-    ? new TelegramNotificationProvider(settings.telegramBotToken, settings.telegramChatId)
-    : new MockNotificationProvider(ui);
+  
+  let notificationProvider: any = new MockNotificationProvider(ui);
+  if (settings.notificationProvider === "telegram") {
+    if (settings.telegramBotToken && settings.telegramChatId) {
+      notificationProvider = new TelegramNotificationProvider(settings.telegramBotToken, settings.telegramChatId);
+    } else if (settings.serverUrl) {
+      const userToken = appSettings.get("telegram_linked_user_id");
+      if (userToken) {
+        notificationProvider = new TelegramNotificationProvider(undefined, undefined, settings.serverUrl, userToken);
+      }
+    }
+  }
+
   const monitor = new WishlistMonitor(wishlist, catalogProvider, catalogProvider, new LocalProductMatcher(), notificationProvider, location, settings.databasePath, logger);
   monitor.initialize();
   const compositeWorker = {
@@ -61,7 +73,7 @@ try {
   switch (command) {
     case "interactive": {
       if (args.length !== 0) throw new Error(cliUsage());
-      await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
       break;
     }
     case "run-once": {

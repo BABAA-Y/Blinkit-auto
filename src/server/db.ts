@@ -23,6 +23,50 @@ export class UserRepository {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`);
+    db.exec(`CREATE TABLE IF NOT EXISTS linking_sessions (
+      code TEXT PRIMARY KEY,
+      user_id TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    )`);
+  }
+
+  public createLinkingSession(): string {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const now = Date.now();
+    const expires = new Date(now + 10 * 60 * 1000).toISOString();
+    using db = new DatabaseSync(this.databasePath);
+    db.prepare(`INSERT INTO linking_sessions (code, created_at, expires_at) VALUES (?, ?, ?)`).run(code, new Date(now).toISOString(), expires);
+    return code;
+  }
+
+  public completeLinkingSession(code: string, userId: string): boolean {
+    using db = new DatabaseSync(this.databasePath);
+    const now = new Date().toISOString();
+    db.prepare(`DELETE FROM linking_sessions WHERE expires_at < ?`).run(now);
+    
+    const result = db.prepare(`UPDATE linking_sessions SET user_id = ? WHERE code = ? AND user_id IS NULL`).run(userId, code);
+    return result.changes > 0;
+  }
+
+  public getLinkedUserForSession(code: string): string | undefined {
+    using db = new DatabaseSync(this.databasePath);
+    const row = db.prepare(`SELECT user_id FROM linking_sessions WHERE code = ?`).get(code) as any;
+    return row?.user_id || undefined;
+  }
+
+  public getUserById(id: string): UserRecord | undefined {
+    using db = new DatabaseSync(this.databasePath);
+    const row = db.prepare("SELECT * FROM server_users WHERE id = ?").get(id) as any;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      telegramChatId: row.telegram_chat_id,
+      telegramUserId: row.telegram_user_id || undefined,
+      username: row.username || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
   }
 
   public upsertTelegramUser(chatId: string, userId?: string, username?: string): UserRecord {

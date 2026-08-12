@@ -4,7 +4,8 @@ import type { UserRepository } from "./db.js";
 export class TelegramLinkingServer {
   constructor(
     private readonly users: UserRepository,
-    private readonly botToken: string
+    private readonly botToken: string,
+    private readonly botUsername: string = "BlinkitAutoBot"
   ) {
     if (!this.botToken) {
       throw new Error("TELEGRAM_BOT_TOKEN environment variable is required for the server");
@@ -15,8 +16,55 @@ export class TelegramLinkingServer {
     const host = req.headers.host || "localhost";
     const url = new URL(req.url || "/", `http://${host}`);
     
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/webhook/telegram") {
       await this.handleWebhook(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/link/session") {
+      const code = this.users.createLinkingSession();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ linkingCode: code, botUsername: this.botUsername }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/api/link/status/")) {
+      const code = url.pathname.replace("/api/link/status/", "");
+      const userId = this.users.getLinkedUserForSession(code);
+      if (userId) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ linked: true, userToken: userId }));
+      } else {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ linked: false }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/notify") {
+      try {
+        const body = await parseJsonBody(req);
+        if (body && body.userToken && body.message) {
+          const user = this.users.getUserById(body.userToken);
+          if (user) {
+            await this.sendTelegramMessage(user.telegramChatId, body.message);
+            res.writeHead(200);
+            res.end(JSON.stringify({ success: true }));
+            return;
+          }
+        }
+        res.writeHead(400);
+        res.end(JSON.stringify({ success: false, error: "Invalid token or missing message" }));
+      } catch (e) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ success: false }));
+      }
       return;
     }
 
@@ -52,9 +100,22 @@ export class TelegramLinkingServer {
           const userId = from?.id ? String(from.id) : undefined;
           const username = from?.username;
 
-          if (text === "/start") {
-            this.users.upsertTelegramUser(chatId, userId, username);
-            await this.sendTelegramMessage(chatId, "Welcome to Blinkit-Auto! Your Telegram account has been successfully linked.");
+          if (text.startsWith("/start")) {
+            const parts = text.split(" ");
+            const code = parts.length > 1 ? parts[1] : undefined;
+            
+            const user = this.users.upsertTelegramUser(chatId, userId, username);
+            
+            if (code) {
+              const success = this.users.completeLinkingSession(code, user.id);
+              if (success) {
+                await this.sendTelegramMessage(chatId, "Welcome to Blinkit-Auto! Your Telegram account has been successfully linked.");
+              } else {
+                await this.sendTelegramMessage(chatId, "Welcome to Blinkit-Auto! However, your linking code was invalid or expired. Please generate a new one from the CLI.");
+              }
+            } else {
+              await this.sendTelegramMessage(chatId, "Welcome to Blinkit-Auto! Your Telegram account has been successfully linked.");
+            }
           }
         }
       }

@@ -19,7 +19,7 @@ function setupServer() {
   directories.push(directory);
   const repo = new UserRepository(join(directory, "server.sqlite3"));
   repo.initialize();
-  const server = new TelegramLinkingServer(repo, "mock-bot-token");
+  const server = new TelegramLinkingServer(repo, "mock-bot-token", "TestBot");
   return { repo, server };
 }
 
@@ -149,5 +149,53 @@ describe("Telegram Linking Server", () => {
     expect(json.linked).toBe(true);
     expect(json.user.username).toBe("secretuser");
     expect(response.body).not.toContain("mock-bot-token");
+  });
+
+  it("handles linking sessions correctly", async () => {
+    const { server } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    // 1. Create session
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const sessionResponse = await dataSession;
+    expect(sessionResponse.status).toBe(200);
+    const { linkingCode, botUsername } = JSON.parse(sessionResponse.body);
+    expect(linkingCode).toBeDefined();
+    expect(botUsername).toBe("TestBot");
+
+    // 2. Check status before linking
+    const reqStatus1 = createMockRequest("GET", `/api/link/status/${linkingCode}`);
+    const { res: resStatus1, data: dataStatus1 } = createMockResponse();
+    await server.handleRequest(reqStatus1, resStatus1);
+    const status1 = JSON.parse((await dataStatus1).body);
+    expect(status1.linked).toBe(false);
+
+    // 3. Complete linking via webhook
+    const reqWebhook = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 111 }, from: { id: 111, username: "linker" } }
+    });
+    const { res: resWebhook, data: dataWebhook } = createMockResponse();
+    await server.handleRequest(reqWebhook, resWebhook);
+    await dataWebhook;
+
+    // 4. Check status after linking
+    const reqStatus2 = createMockRequest("GET", `/api/link/status/${linkingCode}`);
+    const { res: resStatus2, data: dataStatus2 } = createMockResponse();
+    await server.handleRequest(reqStatus2, resStatus2);
+    const status2 = JSON.parse((await dataStatus2).body);
+    expect(status2.linked).toBe(true);
+    expect(status2.userToken).toBeDefined();
+
+    // 5. Test api/notify
+    const reqNotify = createMockRequest("POST", "/api/notify", { userToken: status2.userToken, message: "Hello CLI" });
+    const { res: resNotify, data: dataNotify } = createMockResponse();
+    await server.handleRequest(reqNotify, resNotify);
+    const notifyResponse = await dataNotify;
+    expect(notifyResponse.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith("https://api.telegram.org/botmock-bot-token/sendMessage", expect.objectContaining({
+      body: expect.stringContaining("Hello CLI")
+    }));
   });
 });

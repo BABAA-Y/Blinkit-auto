@@ -2,6 +2,7 @@ import prompts from "prompts";
 import { randomUUID } from "node:crypto";
 import type { WishlistRepository } from "../storage/wishlist.js";
 import type { LocationRepository } from "../storage/location.js";
+import type { SettingsRepository } from "../storage/settings.js";
 import type { TerminalUI } from "./output.js";
 import type { Settings } from "../config.js";
 import type { Logger } from "../logging.js";
@@ -10,6 +11,7 @@ import { WishlistScheduler } from "../scheduler.js";
 export async function startInteractiveMenu(
   wishlist: WishlistRepository,
   location: LocationRepository,
+  appSettings: SettingsRepository,
   compositeWorker: { runOnce: () => Promise<any[]> },
   settings: Settings,
   ui: TerminalUI,
@@ -226,14 +228,81 @@ export async function startInteractiveMenu(
         break;
       }
       case "settings": {
-        console.log("\nCurrent Settings:");
-        console.log(`- Monitoring Interval: ${settings.schedulerIntervalMs}ms (${Math.round(settings.schedulerIntervalMs / 60000)} minutes)`);
-        console.log(`- Notification Provider: ${settings.notificationProvider}`);
-        console.log(`- Telegram Configured: ${settings.telegramBotToken ? "Yes" : "No"}`);
-        console.log(`- Database Location: ${settings.databasePath}\n`);
-        
-        ui.info("Note: Settings are currently read-only in the UI. Update .env to change them.");
-        await waitForUser();
+        while (true) {
+          console.clear();
+          console.log("\n╔══════════════════════════════════════════════╗");
+          console.log("║                  SETTINGS                    ║");
+          console.log("╚══════════════════════════════════════════════╝\n");
+          
+          const isLinked = !!appSettings.get("telegram_linked_user_id") || !!settings.telegramBotToken;
+          
+          console.log(`Monitoring Interval: ${settings.schedulerIntervalMs}ms (${Math.round(settings.schedulerIntervalMs / 60000)} minutes)`);
+          console.log(`Notification Provider: ${settings.notificationProvider}`);
+          console.log(`Telegram Configured: ${isLinked ? "Yes" : "No"}`);
+          console.log(`Database Location: ${settings.databasePath}\n`);
+
+          const { setAction } = await prompts({
+            type: "select",
+            name: "setAction",
+            message: "Settings Menu",
+            choices: [
+              { title: "Connect Telegram", value: "telegram" },
+              { title: "Back to Main Menu", value: "back" }
+            ]
+          });
+
+          if (!setAction || setAction === "back") {
+            break;
+          }
+
+          if (setAction === "telegram") {
+            if (settings.serverUrl) {
+              ui.info("Requesting linking session from server...");
+              try {
+                const url = settings.serverUrl.endsWith("/") ? settings.serverUrl.slice(0, -1) : settings.serverUrl;
+                const res = await fetch(`${url}/api/link/session`, { method: "POST" });
+                if (!res.ok) throw new Error("Failed to get linking session");
+                const { linkingCode, botUsername } = await res.json();
+                
+                const link = `https://t.me/${botUsername}?start=${linkingCode}`;
+                console.log("\n" + "=".repeat(60));
+                console.log(`1. Open this link in Telegram:\n   ${link}`);
+                console.log("2. Press the START button in the bot chat.");
+                console.log("=".repeat(60) + "\n");
+                
+                ui.info("Waiting for you to complete linking... (Press Ctrl+C to cancel)");
+                
+                let linkedUserId: string | null = null;
+                for (let i = 0; i < 60; i++) { // wait up to 5 minutes (60 * 5s)
+                  const statusRes = await fetch(`${url}/api/link/status/${linkingCode}`);
+                  if (statusRes.ok) {
+                    const statusData = await statusRes.json();
+                    if (statusData.linked) {
+                      linkedUserId = statusData.userToken;
+                      break;
+                    }
+                  }
+                  await new Promise(r => setTimeout(r, 5000));
+                }
+
+                if (linkedUserId) {
+                  appSettings.set("telegram_linked_user_id", linkedUserId);
+                  console.log("\n✓ Telegram connected successfully");
+                  console.log("✓ Notifications enabled (Make sure BLINKIT_AUTO_NOTIFICATION_PROVIDER=telegram is set)\n");
+                } else {
+                  ui.error("Linking timed out. Please try again.");
+                }
+              } catch (err: any) {
+                ui.error(`Error during linking: ${err.message}`);
+              }
+            } else if (settings.telegramBotToken) {
+              ui.info("Telegram is already configured locally via .env (TELEGRAM_BOT_TOKEN).");
+            } else {
+              ui.error("Telegram is not configured. Please set BLINKIT_AUTO_SERVER_URL or TELEGRAM_BOT_TOKEN in .env.");
+            }
+            await waitForUser();
+          }
+        }
         break;
       }
     }
@@ -241,5 +310,5 @@ export async function startInteractiveMenu(
 }
 
 async function waitForUser() {
-  await prompts({ type: "text", name: "continue", message: "Press Enter to return to menu..." });
+  await prompts({ type: "text", name: "continue", message: "Press Enter to continue..." });
 }

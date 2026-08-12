@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: blinkit-auto-server
+    env: node
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/src/server/index.js
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATABASE_PATH
+        value: /var/data/blinkit_auto.sqlite3
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false

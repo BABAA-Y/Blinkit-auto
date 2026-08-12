@@ -6,6 +6,7 @@ import prompts from "prompts";
 import { startInteractiveMenu } from "../src/ui/interactive.js";
 import { WishlistRepository } from "../src/storage/wishlist.js";
 import { LocationRepository } from "../src/storage/location.js";
+import { SettingsRepository } from "../src/storage/settings.js";
 import type { TerminalUI } from "../src/ui/output.js";
 import type { Settings } from "../src/config.js";
 import type { Logger } from "../src/logging.js";
@@ -27,6 +28,8 @@ function setup() {
   wishlist.initialize();
   const location = new LocationRepository(databasePath);
   location.initialize();
+  const appSettings = new SettingsRepository(databasePath);
+  appSettings.initialize();
   
   const compositeWorker = { runOnce: vi.fn().mockResolvedValue([{ approved: true }, { approved: false }]) };
   
@@ -47,7 +50,7 @@ function setup() {
   
   const logger: Logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   
-  return { wishlist, location, compositeWorker, settings, ui, logger };
+  return { wishlist, location, appSettings, compositeWorker, settings, ui, logger };
 }
 
 describe("Interactive Menu", () => {
@@ -58,14 +61,14 @@ describe("Interactive Menu", () => {
   });
 
   it("can exit immediately", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     prompts.inject(["exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     expect(ui.success).toHaveBeenCalledWith("Goodbye!");
   });
 
   it("can add a wishlist item and generate an automatic ID", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     prompts.inject([
       "add",
@@ -79,7 +82,7 @@ describe("Interactive Menu", () => {
       "exit"
     ]);
 
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     const items = wishlist.list();
     expect(items).toHaveLength(1);
@@ -93,52 +96,52 @@ describe("Interactive Menu", () => {
   });
 
   it("can view wishlist", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     wishlist.save({ id: "milk123", desiredProductName: "Milk", maximumUnitPricePaise: 5000, quantity: 2, cooldownMinutes: 30, enabled: true });
     
     prompts.inject(["view", "", "exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     expect(ui.printTable).toHaveBeenCalled();
   });
 
   it("can remove a wishlist item", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     wishlist.save({ id: "milk123", desiredProductName: "Milk", maximumUnitPricePaise: 5000, quantity: 2, cooldownMinutes: 30, enabled: true });
     
     prompts.inject(["remove", "milk123", true, "", "exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     expect(wishlist.list()).toHaveLength(0);
     expect(ui.success).toHaveBeenCalledWith("Product removed from wishlist.");
   });
 
   it("can check now and run worker", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     prompts.inject(["check", "", "exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     expect(compositeWorker.runOnce).toHaveBeenCalled();
   });
 
   it("can start and stop monitoring scheduler", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     prompts.inject(["monitor", "", "monitor", "", "exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     // The second monitor command stops the scheduler
     expect(ui.success).toHaveBeenCalledWith("Monitoring stopped.");
   });
 
   it("can update delivery location", async () => {
-    const { wishlist, location, compositeWorker, settings, ui, logger } = setup();
+    const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
     
     prompts.inject(["location", true, "110001", "Delhi", "Delhi", "", "exit"]);
-    await startInteractiveMenu(wishlist, location, compositeWorker, settings, ui, logger);
+    await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
     
     const loc = location.get();
     expect(loc?.pincode).toBe("110001");
@@ -149,5 +152,82 @@ describe("Interactive Menu", () => {
   
   it("shows interactive in CLI usage as the first option", () => {
     expect(cliUsage()).toContain("[interactive|");
+  });
+
+  describe("Connect Telegram Priority", () => {
+    let originalFetch: typeof global.fetch;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it("Case A: serverUrl and botToken configured -> uses server flow", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://localhost:3000";
+      settings.telegramBotToken = "local-token";
+      
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        if (url.toString().includes("/api/link/session")) {
+          return { ok: true, json: async () => ({ linkingCode: "123456", botUsername: "testbot" }) };
+        }
+        if (url.toString().includes("/api/link/status")) {
+          return { ok: true, json: async () => ({ linked: true, userToken: "user123" }) };
+        }
+        return { ok: false };
+      }) as any;
+      
+      prompts.inject(["settings", "telegram", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(ui.info).toHaveBeenCalledWith("Requesting linking session from server...");
+      expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/api/link/session", expect.any(Object));
+    });
+
+    it("Case B: serverUrl missing, botToken configured -> uses local flow", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      delete settings.serverUrl;
+      settings.telegramBotToken = "local-token";
+      
+      prompts.inject(["settings", "telegram", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(ui.info).toHaveBeenCalledWith("Telegram is already configured locally via .env (TELEGRAM_BOT_TOKEN).");
+    });
+
+    it("Case C: serverUrl configured, botToken missing -> uses server flow", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://localhost:3000";
+      delete settings.telegramBotToken;
+      
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        if (url.toString().includes("/api/link/session")) {
+          return { ok: true, json: async () => ({ linkingCode: "123456", botUsername: "testbot" }) };
+        }
+        if (url.toString().includes("/api/link/status")) {
+          return { ok: true, json: async () => ({ linked: true, userToken: "user123" }) };
+        }
+        return { ok: false };
+      }) as any;
+      
+      prompts.inject(["settings", "telegram", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(ui.info).toHaveBeenCalledWith("Requesting linking session from server...");
+    });
+
+    it("Case D: both missing -> shows configuration error", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      delete settings.serverUrl;
+      delete settings.telegramBotToken;
+      
+      prompts.inject(["settings", "telegram", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(ui.error).toHaveBeenCalledWith("Telegram is not configured. Please set BLINKIT_AUTO_SERVER_URL or TELEGRAM_BOT_TOKEN in .env.");
+    });
   });
 });

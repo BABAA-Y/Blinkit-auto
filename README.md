@@ -45,8 +45,10 @@ npm start -- wishlist disable milk
 | `BLINKIT_AUTO_DUPLICATE_WINDOW_MINUTES` | `60` | Minimum interval before a product can receive another local approval. |
 | `BLINKIT_AUTO_SCHEDULER_INTERVAL_MS` | `300000` | Interval in milliseconds for continuous local worker runs. |
 | `BLINKIT_AUTO_NOTIFICATION_PROVIDER` | `mock` | Can be set to `telegram` for real notifications. |
-| `BLINKIT_AUTO_TELEGRAM_BOT_TOKEN` | | Telegram bot token. |
-| `BLINKIT_AUTO_TELEGRAM_CHAT_ID` | | Telegram chat ID. |
+| `BLINKIT_AUTO_SERVER_URL` | | URL for the Telegram linking backend server (used by CLI). |
+| `TELEGRAM_BOT_TOKEN` | | Server-side only: Telegram bot token. |
+| `PORT` | `3000` | Server-side only: Port to listen on. |
+| `DATABASE_PATH` | `data/blinkit_auto.sqlite3` | Server-side only: Path to server database. |
 
 You can place your local environment configuration in a `.env` file at the root of the project (this file is ignored by Git). See `.env.example` for placeholder values. Existing environment variables will take precedence over `.env` values.
 
@@ -56,9 +58,17 @@ Wishlist commands use only the local SQLite database. `wishlist add` accepts `<i
 
 ## Telegram User Linking
 
-As Blinkit-Auto moves towards a multi-user architecture, users will eventually be able to link their Telegram accounts to the system. Once the Telegram bot is live, users will simply open the Blinkit-Auto Telegram bot and press `/start` to securely associate their Telegram chat with their Blinkit-Auto account. This will enable personalized, real-time availability notifications.
+Blinkit-Auto CLI allows you to connect your Telegram account easily, without managing bot tokens directly!
 
-Do not document or reveal any real bot tokens or API credentials here.
+**Connecting Telegram via the CLI:**
+1. Launch the interactive UI using `blinkit-auto` (or `npm start`).
+2. Go to **7. Settings** -> **Connect Telegram**.
+3. The CLI will request a short-lived linking session from the backend (`BLINKIT_AUTO_SERVER_URL`) and display a unique deep link, such as:
+   `https://t.me/BlinkitAutoBot?start=A1B2C3`
+4. Open the link in Telegram and press the **START** button.
+5. The CLI will automatically detect the completed link, connect your account, and enable Telegram notifications.
+
+*Note for Developers:* To run your own linking backend, you must configure `BLINKIT_AUTO_SERVER_URL` pointing to your local `src/server` instance and set `BLINKIT_AUTO_TELEGRAM_BOT_TOKEN` server-side. Do not document or reveal any real bot tokens or API credentials here.
 
 ## Next integration step
 
