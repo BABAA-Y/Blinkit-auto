@@ -4,14 +4,13 @@ services:
     env: node
     buildCommand: npm ci && npm run build
     startCommand: node dist/src/server/index.js
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
+    plan: free
     envVars:
       - key: PORT
         value: 3000
+      # IMPORTANT: SQLite data will not persist across restarts on the Free tier.
+      # This is only for temporary test deployments.
       - key: DATABASE_PATH
-        value: /var/data/blinkit_auto.sqlite3
+        value: /tmp/blinkit_auto.sqlite3
       - key: TELEGRAM_BOT_TOKEN
         sync: false
