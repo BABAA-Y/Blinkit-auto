@@ -151,7 +151,7 @@ describe("Interactive Menu", () => {
   });
   
   it("shows interactive in CLI usage as the first option", () => {
-    expect(cliUsage()).toContain("[interactive|");
+    expect(cliUsage()).toContain("(no command)                    Open interactive menu");
   });
 
   describe("Connect Telegram Priority", () => {

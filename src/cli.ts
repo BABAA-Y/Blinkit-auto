@@ -83,7 +83,32 @@ export function runWishlistCommand(args: readonly string[], repository: Wishlist
 }
 
 export function cliUsage(): string {
-  return "Usage: npm start -- [interactive|run-once|run|status|wishlist list|wishlist add <id> <desired-product-name> <quantity> <max-unit-price> <cooldown-minutes> [enabled|disabled] [brand|-] [keywords|-]|wishlist remove <id>|wishlist enable <id>|wishlist disable <id>|wishlist reset-availability <id> <pincode>|catalog list|catalog set-availability <sku> <true|false> <quantity> [pincode]|location set <pincode> [city] [state]|location show]";
+  return `BLINKIT-AUTO
+
+Wishlist Availability Monitor
+
+Usage:
+  blinkit-auto [command]
+
+Commands:
+  (no command)                    Open interactive menu
+  run-once                        Run one monitoring check
+  run                             Start monitoring
+  status                          Show worker status
+  wishlist list                   List wishlist items
+  wishlist add ...                Add a wishlist item
+  wishlist remove <id>            Remove a wishlist item
+  wishlist enable <id>            Enable a wishlist item
+  wishlist disable <id>           Disable a wishlist item
+  wishlist reset-availability ... Reset availability state
+  catalog list                    List catalog items
+  catalog set-availability ...    Set mock catalog item availability
+  location set ...                Set delivery location
+  location show                   Show delivery location
+
+Options:
+  -h, --help                      Show this help
+  -v, --version                   Show version`;
 }
 
 export function runCatalogCommand(args: readonly string[], catalog: any, ui: TerminalUI): void {

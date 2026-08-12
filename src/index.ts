@@ -1,9 +1,32 @@
+import { readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { cliUsage, runCatalogCommand, runLocationCommand, runWishlistCommand } from "./cli.js";
+
+const cliArgs = process.argv.slice(2);
+if (cliArgs.length > 0) {
+  const firstArg = cliArgs[0];
+  if (firstArg === "--version" || firstArg === "-v") {
+    let currentDir = dirname(fileURLToPath(import.meta.url));
+    let packageJsonPath = join(currentDir, "package.json");
+    while (!existsSync(packageJsonPath) && currentDir !== dirname(currentDir)) {
+      currentDir = dirname(currentDir);
+      packageJsonPath = join(currentDir, "package.json");
+    }
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    console.log(`blinkit-auto v${pkg.version}`);
+    process.exit(0);
+  } else if (firstArg === "--help" || firstArg === "-h") {
+    console.log(cliUsage());
+    process.exit(0);
+  }
+}
+
 import { config } from "dotenv";
 config();
 
 import { LocalProductMatcher } from "./ai/decision.js";
 import { SafeAutomationService } from "./app.js";
-import { cliUsage, runCatalogCommand, runLocationCommand, runWishlistCommand } from "./cli.js";
 import { startInteractiveMenu } from "./ui/interactive.js";
 import { PurchaseRules } from "./automation/rules.js";
 import { settingsFromEnvironment } from "./config.js";
