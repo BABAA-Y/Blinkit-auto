@@ -31,8 +31,36 @@ export async function startInteractiveMenu(
     const locStr = loc ? `${loc.pincode}${loc.city ? `, ${loc.city}` : ""}${loc.latitude && loc.longitude ? ` [${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}]` : ""}` : "Not configured";
     console.log(`📍 Location: ${locStr}`);
     
-    const tgEnabled = settings.notificationProvider === "telegram" && settings.telegramBotToken && settings.telegramChatId;
-    console.log(`📱 Telegram Notifications: ${tgEnabled ? "Enabled" : "Disabled"}\n`);
+    const isLinked = !!appSettings.get("telegram_linked_user_id");
+    const hasLocal = !!(settings.telegramBotToken && settings.telegramChatId);
+    let tgStatus = "Disabled";
+    
+    if (settings.serverUrl) {
+      tgStatus = isLinked ? "Enabled" : "Available / Not Connected";
+    } else if (hasLocal) {
+      tgStatus = "Enabled";
+    }
+    
+    if (tgStatus === "Enabled" && settings.notificationProvider !== "telegram") {
+      tgStatus = "Configured (Disabled via provider setting)";
+    } else if (tgStatus === "Enabled") {
+      tgStatus = "Enabled";
+    } else if (tgStatus === "Available / Not Connected" && settings.notificationProvider !== "telegram") {
+       tgStatus = "Available / Not Connected (Disabled via provider setting)";
+    }
+
+    // Exact matching for prompt requirements when provider is telegram:
+    if (settings.notificationProvider === "telegram") {
+      if (settings.serverUrl) {
+         tgStatus = isLinked ? "Enabled" : "Available / Not Connected";
+      } else if (hasLocal) {
+         tgStatus = "Enabled";
+      } else {
+         tgStatus = "Disabled";
+      }
+    }
+    
+    console.log(`📱 Telegram Notifications: ${tgStatus}\n`);
   };
 
   while (true) {
@@ -163,7 +191,17 @@ export async function startInteractiveMenu(
           const loc = location.get();
           console.log(`📍 Location: ${loc ? `${loc.pincode}${loc.latitude && loc.longitude ? ` [${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}]` : ""}` : "Not configured"}`);
           console.log(`⏱ Interval: ${Math.round(settings.schedulerIntervalMs / 60000)} minutes`);
-          console.log(`📱 Telegram: ${settings.notificationProvider === "telegram" ? "Enabled" : "Disabled"}\n`);
+          let tgStatus = "Disabled";
+          const isLinked = !!appSettings.get("telegram_linked_user_id");
+          const hasLocal = !!(settings.telegramBotToken && settings.telegramChatId);
+          if (settings.notificationProvider === "telegram") {
+            if (settings.serverUrl) {
+              tgStatus = isLinked ? "Enabled" : "Available / Not Connected";
+            } else if (hasLocal) {
+              tgStatus = "Enabled";
+            }
+          }
+          console.log(`📱 Telegram: ${tgStatus}\n`);
         }
         await waitForUser();
         break;
@@ -247,6 +285,7 @@ export async function startInteractiveMenu(
             message: "Settings Menu",
             choices: [
               { title: "Connect Telegram", value: "telegram" },
+              { title: "Test Telegram Notification", value: "test_notification" },
               { title: "Back to Main Menu", value: "back" }
             ]
           });
@@ -299,6 +338,49 @@ export async function startInteractiveMenu(
               ui.info("Telegram is already configured locally via .env (TELEGRAM_BOT_TOKEN).");
             } else {
               ui.error("Telegram is not configured. Please set BLINKIT_AUTO_SERVER_URL or TELEGRAM_BOT_TOKEN in .env.");
+            }
+            await waitForUser();
+          } else if (setAction === "test_notification") {
+            const userToken = appSettings.get("telegram_linked_user_id");
+            if (settings.serverUrl && userToken) {
+              const url = settings.serverUrl.endsWith("/") ? settings.serverUrl.slice(0, -1) : settings.serverUrl;
+              ui.info(`Sending test notification via ${url}/api/notify ...`);
+              try {
+                const res = await fetch(`${url}/api/notify`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userToken, message: "🧪 This is a test notification from Blinkit-Auto." })
+                });
+                if (res.ok) {
+                  ui.success(`Test notification sent successfully! (HTTP ${res.status})`);
+                } else {
+                  ui.error(`Failed to send test notification. HTTP ${res.status}`);
+                  try {
+                    const body = await res.json();
+                    if (body.error) ui.error(`Error details: ${body.error}`);
+                  } catch { }
+                }
+              } catch (e: any) {
+                ui.error(`Network error sending test notification: ${e.message}`);
+              }
+            } else if (settings.telegramBotToken && settings.telegramChatId) {
+              ui.info(`Sending test notification directly to Telegram API...`);
+              try {
+                const res = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: settings.telegramChatId, text: "🧪 This is a test notification from Blinkit-Auto." })
+                });
+                if (res.ok) {
+                  ui.success(`Test notification sent successfully! (HTTP ${res.status})`);
+                } else {
+                  ui.error(`Failed to send test notification. HTTP ${res.status}`);
+                }
+              } catch (e: any) {
+                ui.error(`Network error sending test notification: ${e.message}`);
+              }
+            } else {
+              ui.error("Cannot test notification: Telegram is not fully configured or linked.");
             }
             await waitForUser();
           }

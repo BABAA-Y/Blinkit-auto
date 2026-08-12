@@ -47,13 +47,11 @@ try {
   
   let notificationProvider: any = new MockNotificationProvider(ui);
   if (settings.notificationProvider === "telegram") {
-    if (settings.telegramBotToken && settings.telegramChatId) {
+    const userToken = appSettings.get("telegram_linked_user_id");
+    if (settings.serverUrl && userToken) {
+      notificationProvider = new TelegramNotificationProvider(undefined, undefined, settings.serverUrl, userToken);
+    } else if (settings.telegramBotToken && settings.telegramChatId) {
       notificationProvider = new TelegramNotificationProvider(settings.telegramBotToken, settings.telegramChatId);
-    } else if (settings.serverUrl) {
-      const userToken = appSettings.get("telegram_linked_user_id");
-      if (userToken) {
-        notificationProvider = new TelegramNotificationProvider(undefined, undefined, settings.serverUrl, userToken);
-      }
     }
   }
 

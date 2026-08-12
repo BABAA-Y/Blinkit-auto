@@ -230,4 +230,99 @@ describe("Interactive Menu", () => {
       expect(ui.error).toHaveBeenCalledWith("Telegram is not configured. Please set BLINKIT_AUTO_SERVER_URL or TELEGRAM_BOT_TOKEN in .env.");
     });
   });
+
+  describe("Telegram Status Display", () => {
+    let consoleLogSpy: any;
+    beforeEach(() => {
+      consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    it("server URL + not linked (provider=telegram)", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://server";
+      settings.notificationProvider = "telegram";
+      appSettings.set("telegram_linked_user_id", "");
+      prompts.inject(["exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Telegram Notifications: Available / Not Connected"));
+    });
+
+    it("server URL + successfully linked (provider=telegram)", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://server";
+      settings.notificationProvider = "telegram";
+      appSettings.set("telegram_linked_user_id", "123");
+      prompts.inject(["exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Telegram Notifications: Enabled"));
+    });
+
+    it("legacy local-token mode", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      delete settings.serverUrl;
+      settings.telegramBotToken = "token";
+      settings.telegramChatId = "chat";
+      settings.notificationProvider = "telegram";
+      prompts.inject(["exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Telegram Notifications: Enabled"));
+    });
+
+    it("no Telegram configuration", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      delete settings.serverUrl;
+      delete settings.telegramBotToken;
+      settings.notificationProvider = "telegram";
+      prompts.inject(["exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Telegram Notifications: Disabled"));
+    });
+  });
+
+  describe("Test Telegram Notification", () => {
+    let originalFetch: typeof global.fetch;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it("sends test notification successfully to server backend", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://server.com";
+      appSettings.set("telegram_linked_user_id", "test-user-id");
+      
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+      
+      prompts.inject(["settings", "test_notification", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(global.fetch).toHaveBeenCalledWith("http://server.com/api/notify", expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("test-user-id")
+      }));
+      expect(ui.success).toHaveBeenCalledWith(expect.stringContaining("HTTP 200"));
+    });
+
+    it("handles test notification failure gracefully", async () => {
+      const { wishlist, location, appSettings, compositeWorker, settings, ui, logger } = setup();
+      settings.serverUrl = "http://server.com";
+      appSettings.set("telegram_linked_user_id", "test-user-id");
+      
+      global.fetch = vi.fn().mockResolvedValue({ 
+        ok: false, 
+        status: 400, 
+        json: async () => ({ error: "Invalid userToken" }) 
+      });
+      
+      prompts.inject(["settings", "test_notification", "", "back", "exit"]);
+      await startInteractiveMenu(wishlist, location, appSettings, compositeWorker, settings, ui, logger);
+      
+      expect(ui.error).toHaveBeenCalledWith(expect.stringContaining("HTTP 400"));
+      expect(ui.error).toHaveBeenCalledWith(expect.stringContaining("Invalid userToken"));
+    });
+  });
 });
