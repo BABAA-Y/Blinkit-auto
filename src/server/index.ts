@@ -4,7 +4,7 @@ import { mkdirSync } from "node:fs";
 import { UserRepository } from "./db.js";
 import { TelegramLinkingServer } from "./handler.js";
 
-export function createLinkingServer(): Server {
+export async function createLinkingServer(): Promise<{ server: Server, handler: TelegramLinkingServer }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     throw new Error("TELEGRAM_BOT_TOKEN environment variable is required for the server");
@@ -17,13 +17,16 @@ export function createLinkingServer(): Server {
   const repo = new UserRepository(dbPath);
   repo.initialize();
 
-  const handler = new TelegramLinkingServer(repo, token);
-  return createServer((req, res) => handler.handleRequest(req, res));
+  const handler = new TelegramLinkingServer(repo, token, process.env.TELEGRAM_BOT_USERNAME);
+  await handler.initialize(process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL);
+  
+  const server = createServer((req, res) => handler.handleRequest(req, res));
+  return { server, handler };
 }
 
-export function startServer() {
+export async function startServer() {
   try {
-    const server = createLinkingServer();
+    const { server } = await createLinkingServer();
     const port = parseInt(process.env.PORT || "3000", 10);
     
     server.listen(port, "0.0.0.0", () => {

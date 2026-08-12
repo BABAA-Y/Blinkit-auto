@@ -30,18 +30,27 @@ describe("Telegram Linking Server Entry Point", () => {
   });
 
   it("starts and responds to /health and handles graceful shutdown", async () => {
-    const port = 3001; // use different port for test
+    const port = 3005; // use different port for test
     const serverProcess = exec(`npx tsx src/server/index.ts`, {
       env: { ...process.env, TELEGRAM_BOT_TOKEN: "test-token", DATABASE_PATH: dbPath, PORT: port.toString(), NODE_ENV: "production" }
     });
 
     let stdout = "";
-    serverProcess.stdout?.on("data", (data) => {
-      stdout += data;
-    });
+    let stderr = "";
+    serverProcess.stdout?.on("data", (data) => { stdout += data; });
+    serverProcess.stderr?.on("data", (data) => { stderr += data; });
 
     // Wait for server to start
-    await new Promise(r => setTimeout(r, 2000));
+    let started = false;
+    for (let i = 0; i < 20; i++) {
+      if (stdout.includes(`Telegram Linking Server listening on 0.0.0.0:${port}`)) {
+        started = true;
+        break;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+    
+    if (!started) console.log("STDOUT:", stdout, "\nSTDERR:", stderr);
 
     expect(stdout).toContain(`Telegram Linking Server listening on 0.0.0.0:${port}`);
 

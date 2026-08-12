@@ -2,13 +2,44 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import type { UserRepository } from "./db.js";
 
 export class TelegramLinkingServer {
+  private botUsername: string;
+
   constructor(
     private readonly users: UserRepository,
     private readonly botToken: string,
-    private readonly botUsername: string = "BlinkitAutoBot"
+    configuredUsername?: string
   ) {
     if (!this.botToken) {
       throw new Error("TELEGRAM_BOT_TOKEN environment variable is required for the server");
+    }
+    this.botUsername = configuredUsername || "BlinkitAutoBot";
+  }
+
+  public async initialize(publicUrl?: string): Promise<void> {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${this.botToken}/getMe`);
+      const data = await res.json();
+      if (data.ok && data.result?.username) {
+        this.botUsername = data.result.username;
+        console.log(`Telegram bot verified: @${this.botUsername}`);
+      }
+    } catch (e) {
+      console.warn("Failed to verify bot via Telegram API");
+    }
+
+    if (publicUrl) {
+      try {
+        const webhookUrl = `${publicUrl}/webhook/telegram`;
+        const res = await fetch(`https://api.telegram.org/bot${this.botToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+        const data = await res.json();
+        if (data.ok) {
+          console.log(`Successfully registered Telegram webhook to: ${webhookUrl}`);
+        } else {
+          console.warn(`Failed to register webhook: ${data.description}`);
+        }
+      } catch (e) {
+        console.warn("Failed to register webhook via Telegram API");
+      }
     }
   }
 

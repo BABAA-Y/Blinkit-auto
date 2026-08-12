@@ -47,6 +47,8 @@ npm start -- wishlist disable milk
 | `BLINKIT_AUTO_NOTIFICATION_PROVIDER` | `mock` | Can be set to `telegram` for real notifications. |
 | `BLINKIT_AUTO_SERVER_URL` | | URL for the Telegram linking backend server (used by CLI). |
 | `TELEGRAM_BOT_TOKEN` | | Server-side only: Telegram bot token. |
+| `TELEGRAM_BOT_USERNAME` | | Server-side only (optional): Explicitly define bot username, otherwise it is auto-resolved via Telegram API. |
+| `PUBLIC_URL` | | Server-side only (optional): Public URL of this server to automatically register the Telegram webhook. If deploying to Render, `RENDER_EXTERNAL_URL` is used automatically. |
 | `PORT` | `3000` | Server-side only: Port to listen on. |
 | `DATABASE_PATH` | `data/blinkit_auto.sqlite3` | Server-side only: Path to server database. |
 

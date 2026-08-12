@@ -198,4 +198,31 @@ describe("Telegram Linking Server", () => {
       body: expect.stringContaining("Hello CLI")
     }));
   });
+
+  it("dynamically resolves bot username via getMe and registers webhook", async () => {
+    const { repo } = setupServer();
+    const server = new TelegramLinkingServer(repo, "mock-bot-token");
+    const fetchMock = vi.spyOn(global, "fetch").mockImplementation(async (url) => {
+      if (url.toString().includes("getMe")) {
+        return { ok: true, json: async () => ({ ok: true, result: { username: "DynamicResolvedBot" } }) } as any;
+      }
+      if (url.toString().includes("setWebhook")) {
+        return { ok: true, json: async () => ({ ok: true }) } as any;
+      }
+      return { ok: false } as any;
+    });
+
+    await server.initialize("https://test.server.com");
+    
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("getMe"));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("setWebhook?url=https%3A%2F%2Ftest.server.com%2Fwebhook%2Ftelegram"));
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const sessionResponse = await dataSession;
+    
+    const { botUsername } = JSON.parse(sessionResponse.body);
+    expect(botUsername).toBe("DynamicResolvedBot");
+  });
 });
