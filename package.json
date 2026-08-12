@@ -1,6 +1,6 @@
 {
   "name": "blinkit-auto",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Safe local-first automation architecture for Blinkit-Auto",
   "type": "module",
   "bin": {
