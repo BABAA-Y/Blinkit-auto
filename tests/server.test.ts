@@ -225,4 +225,157 @@ describe("Telegram Linking Server", () => {
     const { botUsername } = JSON.parse(sessionResponse.body);
     expect(botUsername).toBe("DynamicResolvedBot");
   });
+
+  it("same telegram user sending the same /start twice succeeds both times and links idempotently", async () => {
+    const { server, repo } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const { linkingCode } = JSON.parse((await dataSession).body);
+
+    const reqWebhook1 = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 333 }, from: { id: 333, username: "idempotent" } }
+    });
+    const { res: resWebhook1, data: dataWebhook1 } = createMockResponse();
+    await server.handleRequest(reqWebhook1, resWebhook1);
+    await dataWebhook1;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("successfully linked")
+    }));
+    
+    vi.clearAllMocks();
+
+    const reqWebhook2 = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 333 }, from: { id: 333, username: "idempotent" } }
+    });
+    const { res: resWebhook2, data: dataWebhook2 } = createMockResponse();
+    await server.handleRequest(reqWebhook2, resWebhook2);
+    await dataWebhook2;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("successfully linked")
+    }));
+  });
+
+  it("different telegram user using an already-linked code is rejected", async () => {
+    const { server, repo } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const { linkingCode } = JSON.parse((await dataSession).body);
+
+    const reqWebhook1 = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 444 }, from: { id: 444, username: "userA" } }
+    });
+    const { res: resWebhook1, data: dataWebhook1 } = createMockResponse();
+    await server.handleRequest(reqWebhook1, resWebhook1);
+    await dataWebhook1;
+
+    vi.clearAllMocks();
+
+    const reqWebhook2 = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 555 }, from: { id: 555, username: "userB" } }
+    });
+    const { res: resWebhook2, data: dataWebhook2 } = createMockResponse();
+    await server.handleRequest(reqWebhook2, resWebhook2);
+    await dataWebhook2;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("invalid or expired")
+    }));
+  });
+
+  it("expired code is rejected", async () => {
+    const { server, repo } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const { linkingCode } = JSON.parse((await dataSession).body);
+
+    // manually expire the code in the DB by changing its expires_at
+    const dbPath = (repo as any).databasePath;
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(dbPath);
+    db.prepare("UPDATE linking_sessions SET expires_at = ? WHERE code = ?").run(new Date(Date.now() - 1000).toISOString(), linkingCode);
+    db.close();
+
+    const reqWebhook = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${linkingCode}`, chat: { id: 666 }, from: { id: 666, username: "late" } }
+    });
+    const { res: resWebhook, data: dataWebhook } = createMockResponse();
+    await server.handleRequest(reqWebhook, resWebhook);
+    await dataWebhook;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("invalid or expired")
+    }));
+  });
+
+  it("lowercase code is accepted after normalization", async () => {
+    const { server } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const { linkingCode } = JSON.parse((await dataSession).body);
+
+    const lowercaseCode = linkingCode.toLowerCase();
+    
+    const reqWebhook = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start ${lowercaseCode}`, chat: { id: 777 }, from: { id: 777, username: "lower" } }
+    });
+    const { res: resWebhook, data: dataWebhook } = createMockResponse();
+    await server.handleRequest(reqWebhook, resWebhook);
+    await dataWebhook;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("successfully linked")
+    }));
+  });
+
+  it("whitespace around code is ignored", async () => {
+    const { server } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqSession = createMockRequest("POST", "/api/link/session");
+    const { res: resSession, data: dataSession } = createMockResponse();
+    await server.handleRequest(reqSession, resSession);
+    const { linkingCode } = JSON.parse((await dataSession).body);
+    
+    // adding spaces around the code
+    const reqWebhook = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start   ${linkingCode}  `, chat: { id: 888 }, from: { id: 888, username: "space" } }
+    });
+    const { res: resWebhook, data: dataWebhook } = createMockResponse();
+    await server.handleRequest(reqWebhook, resWebhook);
+    await dataWebhook;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("successfully linked")
+    }));
+  });
+
+  it("invalid code is rejected", async () => {
+    const { server } = setupServer();
+    vi.spyOn(global, "fetch").mockResolvedValue({ ok: true } as any);
+
+    const reqWebhook = createMockRequest("POST", "/webhook/telegram", {
+      message: { text: `/start NONEXISTENT`, chat: { id: 999 }, from: { id: 999, username: "invalid" } }
+    });
+    const { res: resWebhook, data: dataWebhook } = createMockResponse();
+    await server.handleRequest(reqWebhook, resWebhook);
+    await dataWebhook;
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining("invalid or expired")
+    }));
+  });
 });

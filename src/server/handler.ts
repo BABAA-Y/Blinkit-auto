@@ -133,7 +133,7 @@ export class TelegramLinkingServer {
 
           if (text.startsWith("/start")) {
             const parts = text.split(" ");
-            const code = parts.length > 1 ? parts[1] : undefined;
+            const code = parts.length > 1 ? parts[1].trim().toUpperCase() : undefined;
             
             const user = this.users.upsertTelegramUser(chatId, userId, username);
             

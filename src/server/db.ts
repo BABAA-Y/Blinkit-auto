@@ -45,7 +45,7 @@ export class UserRepository {
     const now = new Date().toISOString();
     db.prepare(`DELETE FROM linking_sessions WHERE expires_at < ?`).run(now);
     
-    const result = db.prepare(`UPDATE linking_sessions SET user_id = ? WHERE code = ? AND user_id IS NULL`).run(userId, code);
+    const result = db.prepare(`UPDATE linking_sessions SET user_id = ? WHERE code = ? AND (user_id IS NULL OR user_id = ?)`).run(userId, code, userId);
     return result.changes > 0;
   }
 
